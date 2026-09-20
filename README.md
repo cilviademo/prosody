@@ -69,9 +69,18 @@ Options, if you clone the repository first:
 
 ### Or download by hand
 
-Grab `Prosody-v0.1.0-Windows.zip` (portable) or `Prosody-v0.1.0-Setup.exe`
-(installer) from the repository's **Releases** page, in a browser. No account,
-no `git`, no terminal.
+From the repository's **Releases** page, in a browser — no account, no `git`,
+no terminal:
+
+| File | Size | Use it when |
+| --- | --- | --- |
+| `Prosody-v0.1.0-Windows.zip` | 20 MB | almost always. Extract and run. |
+| `Prosody_0.1.0_x64-setup.exe` | 222 MB | you want a Start Menu entry and an uninstaller, or the machine has no internet and no Edge WebView2 runtime. |
+
+The installer is large because it carries the whole WebView2 runtime rather
+than downloading it during setup, so it works on a machine with no connection.
+Almost every Windows 11 machine already has WebView2, which is why the 20 MB
+ZIP is the normal choice.
 
 Extract the ZIP anywhere you can write to and double-click `Prosody.exe`. Keep
 the folder together — the executable needs `resources/` beside it.

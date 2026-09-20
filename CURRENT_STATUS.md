@@ -36,7 +36,7 @@ conditions as passed.
 | --- | --- | --- |
 | 1 | Starts from a folder outside the repo, second account, no dev tools | NOT RUN — needs Windows |
 | 2 | No global Python, Node, Git or GitHub needed | ENFORCED IN CODE — the run-from-source path is `#[cfg(debug_assertions)]` and absent from a release; a test asserts it |
-| 3 | WebView2 handled | CONFIGURED — installer now uses `offlineInstaller`; the portable build detects and explains. NOT OBSERVED |
+| 3 | WebView2 handled | BUILT — the installer now carries the runtime (`offlineInstaller`), which took it from 17.6 MB to 221.7 MB; the portable build detects and explains. The bundling succeeded; the behaviour on a machine *without* WebView2 is NOT OBSERVED |
 | 4 | Core starts, hash matches build-info | VERIFIED — the published v0.1.0 core's SHA-256 equals the value in its `build-info.json`, checked against the downloaded artifact |
 | 5 | Workspace and DB initialise; System Check has no FAIL | VERIFIED HERE, not on Windows |
 | 6 | Source read-only safeguards pass their tests | VERIFIED — 18 tests, including a hard-link identity case and a write-over-source attempt that leaves the bytes unchanged |

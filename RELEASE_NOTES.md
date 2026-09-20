@@ -22,8 +22,13 @@ Start Menu entry and starts the app. Re-run it later to update.
 **Portable:** extract `Prosody-v0.1.0-Windows.zip` anywhere you can write to
 and double-click `Prosody.exe`. Keep the folder together.
 
-**Installed:** run `Prosody-v0.1.0-Setup.exe`. Per-user, no administrator
+**Installed:** run `Prosody_0.1.0_x64-setup.exe`. Per-user, no administrator
 rights, standard uninstall.
+
+It is 222 MB against the ZIP's 20 MB, because it carries the entire Edge
+WebView2 runtime instead of fetching it during setup. That makes it work on a
+machine with no internet; if yours has WebView2 already — nearly every Windows
+11 machine does — the ZIP is the same application at a tenth the download.
 
 Nothing else is required. Python, Node and Rust are not needed — Prosody ships
 its own core.
