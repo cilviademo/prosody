@@ -51,7 +51,7 @@
     },
     "shortDescription": "Turn loops into records.",
     "longDescription": "Local AI-assisted FL Studio project finisher. Drop an unfinished .flp, choose a genre, and get an arranged derivative project, stems and MIDI - without ever modifying the original.",
-    "licenseFile": "licenses/LICENSE.txt"
+    "licenseFile": "../../../licenses/LICENSE.txt"
   },
   "plugins": {}
 }

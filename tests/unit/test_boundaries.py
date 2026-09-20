@@ -276,3 +276,37 @@ def test_the_release_workflow_builds_from_the_published_branch():
         "release.yml does not build on a push to main, so the one-line "
         "installer can point at a branch with no release behind it"
     )
+
+
+# --- the Windows bundle ----------------------------------------------------
+
+def test_every_path_in_the_tauri_bundle_config_exists():
+    """A path Tauri cannot resolve fails the release build, not the dev build.
+
+    `npm run tauri dev` never reads licenseFile or the icon list, so a wrong
+    path here is invisible until a Windows runner tries to make an installer —
+    twenty minutes into a job, after the whole Rust compile.
+    """
+    import json
+
+    conf_path = REPO / "apps" / "desktop" / "src-tauri" / "tauri.conf.json"
+    conf = json.loads(conf_path.read_text(encoding="utf-8"))
+    # Tauri resolves bundle paths relative to the directory holding the config.
+    base = conf_path.parent
+    bundle = conf.get("bundle", {})
+
+    missing = []
+    for icon in bundle.get("icon", []):
+        if not (base / icon).exists():
+            missing.append(f"bundle.icon: {icon}")
+    license_file = bundle.get("licenseFile")
+    if license_file and not (base / license_file).exists():
+        missing.append(f"bundle.licenseFile: {license_file}")
+    for src in (bundle.get("resources") or {}):
+        if not (base / src).exists():
+            missing.append(f"bundle.resources: {src}")
+
+    assert not missing, (
+        "tauri.conf.json points at files that do not exist, relative to "
+        f"{base}:\n  " + "\n  ".join(missing)
+    )
