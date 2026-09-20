@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Asterism",
+  "version": "0.1.0",
+  "identifier": "audio.asterism.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5183",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Asterism",
+        "width": 1180,
+        "height": 820,
+        "minWidth": 940,
+        "minHeight": 660,
+        "resizable": true,
+        "center": true,
+        "decorations": true,
+        "dragDropEnabled": true,
+        "theme": "Dark",
+        "backgroundColor": "#0E0F12"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data:; media-src 'self' asset: http://asset.localhost blob:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "resources": {
+      "../../../flpfinisher": "flpfinisher"
+    },
+    "shortDescription": "Turn loops into records.",
+    "longDescription": "Local AI-assisted FL Studio project finisher. Drop an unfinished .flp, choose a genre, and get an arranged derivative project, stems and MIDI - without ever modifying the original."
+  },
+  "plugins": {}
+}

@@ -3,6 +3,10 @@
 What does not work, stated plainly. Nothing here is marked complete because it
 compiles or because a test passes against a fixture.
 
+For the current build's working/partial/not-working breakdown see
+**[CURRENT_STATUS.md](CURRENT_STATUS.md)**; this file is the durable list of
+things that are known to be wrong or unproven.
+
 ## The big one: no real FL Studio project has ever been parsed by this code
 
 The corpus is empty on the development machine. Every number in SPEC.md's exit
@@ -49,18 +53,23 @@ arrangements for a project that has one.
 
 ## Not implemented at all
 
-- **Rendering.** No FL Studio invocation exists. The MIDI-export switch letter is
+- **Rendering.** The FL command-line wrapper is written but has never been run
+  against FL Studio. The MIDI-export switch letter is
   unconfirmed; `doctor` says `UNCONFIRMED` and the render tier fails under
   `FLPF_RENDER=1` until it is recorded.
-- **Stems.** Neither S1 nor S2. The decision between them needs the save
-  round-trip result.
-- **MIDI extraction, WAV/MP3 preview, project packaging.**
-- **FLP writing.** Nothing creates a derivative project.
-- **The arrangement planner.** Genre profiles and permission enforcement exist as
-  validated data and types; nothing turns a profile into a plan.
-- **SQLite index and `flpf find`.**
-- **LLM anything.** No provider, no prompts, no network code.
-- **UI.** Deferred to Phase 8 by the spec.
+- **Stem rendering.** `solo-copy` writes correct per-role derivative projects,
+  verified; the render half needs FL Studio. `gui-export` is deliberately
+  unimplemented until its click path can be checked against a real install.
+- **Creativity levels 1 and 2.** Selectable in the UI, which says plainly they
+  are not implemented. The engine only repositions existing patterns.
+- **LLM planning.** The provider interface exists; the implementations declare
+  themselves unavailable and fall back to the deterministic planner. There is
+  no network code anywhere in the package.
+- **Sample relinking.** Missing samples are detected and reported, never
+  repaired.
+- **Batch processing.** `Job`/`JobStatus` exist in the domain model; the scan
+  loop is still synchronous and single-threaded.
+- **`flpf find`.** The index stores projects and builds but has no query DSL.
 
 ## Weak by design, for now
 
@@ -83,6 +92,21 @@ sample missing. Relink-by-filename/hash across configured drives is Phase 2.
 **Key detection** is not implemented; `key_guess` is always `null`.
 
 **Automation and audio clips** are not examined.
+
+## Specific to the writer
+
+- **FL 21 playlist items (60 bytes) are untested.** The writer matches whatever
+  item size the source already uses and copies an existing item's trailing
+  bytes; with no item to copy it zero-fills those 28 bytes and warns. Only
+  32-byte items have been exercised.
+- **Pattern length is inferred from note extents** when FL wrote no explicit
+  Length event, then rounded up to whole bars so tiled clips stay on the grid.
+  Correct for every fixture; unverified against projects that deliberately use
+  odd-length patterns.
+- **Patterns that mix roles move as one block** at Level 0, because splitting
+  them would be a note edit. Reported in the plan notes.
+- **Section markers replace any the source had.** Rebuilding is idempotent, but
+  a project with meaningful existing markers loses them in the derivative.
 
 ## Environmental
 

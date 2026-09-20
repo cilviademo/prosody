@@ -78,6 +78,8 @@ class SectionType(str, Enum):
     PRE = "pre"
     HOOK = "hook"
     CHORUS = "chorus"
+    BUILD = "build"
+    DROP = "drop"
     BRIDGE = "bridge"
     BREAKDOWN = "breakdown"
     OUTRO = "outro"
@@ -418,12 +420,29 @@ class ArrangementPlan(_Base):
         return self
 
 
+class EntryRule(_Base):
+    """When a role is first allowed to appear, as a data rule rather than code."""
+
+    role: Role
+    not_before: SectionType | None = None
+    absent_from: tuple[SectionType, ...] = ()
+
+
 class GenreProfile(_Base):
     genre: str
+    label: str = ""
     grammar: dict[str, tuple[str, ...]]
     energy: dict[SectionType, float]
     role_weights: dict[Role, float]
+    #: Roles offered in priority order while filling a section to its density.
+    role_priority: tuple[Role, ...] = ()
+    entry_rules: tuple[EntryRule, ...] = ()
+    #: Sections after which a 1-2 bar drum dropout reads as a transition.
+    dropout_before: tuple[SectionType, ...] = ()
     rules: tuple[str, ...] = ()
+
+    def energy_for(self, section: SectionType) -> float:
+        return self.energy.get(section, 0.5)
 
 
 # --------------------------------------------------------------------------- #
@@ -444,3 +463,92 @@ class Job(_Base):
     status: JobStatus = JobStatus.QUEUED
     message: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# --------------------------------------------------------------------------- #
+# Build outputs
+# --------------------------------------------------------------------------- #
+
+
+class OutputTier(str, Enum):
+    """How complete the generated project is. Both tiers are supported results.
+
+    NATIVE is the goal: an editable derivative .flp. PACK is the documented
+    fallback when a project cannot safely be rewritten - it is not an error.
+    """
+
+    NATIVE = "native"
+    PACK = "pack"
+    NONE = "none"
+
+
+class ArtifactKind(str, Enum):
+    FLP = "flp"
+    WAV = "wav"
+    MP3 = "mp3"
+    MIDI = "midi"
+    STEM = "stem"
+    ZIP = "zip"
+    JSON = "json"
+    REPORT = "report"
+
+
+class Artifact(_Base):
+    """One file this application produced."""
+
+    kind: ArtifactKind
+    path: str
+    label: str
+    bytes: int = 0
+
+
+class StageStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    OK = "ok"
+    WARNING = "warning"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class StageResult(_Base):
+    """One visible step of a build, with an honest outcome."""
+
+    name: str
+    status: StageStatus
+    detail: str = ""
+    artifacts: tuple[Artifact, ...] = ()
+
+
+class BuildResult(_Base):
+    schema_version: str = SCHEMA_VERSION
+    project_id: str
+    out_dir: str
+    tier: OutputTier = OutputTier.NONE
+    stages: tuple[StageResult, ...] = ()
+    artifacts: tuple[Artifact, ...] = ()
+    flp_path: str | None = None
+    preview_wav: str | None = None
+    preview_mp3: str | None = None
+    source_hash_verified: bool = False
+    message: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return not any(s.status is StageStatus.FAILED for s in self.stages)
+
+
+class LibraryEntry(_Base):
+    """One row of the Library view."""
+
+    project_id: str
+    name: str
+    source_path: str
+    tempo: float | None = None
+    key: str | None = None
+    length_bars: float = 0.0
+    genre: str | None = None
+    status: str = "Starter"
+    health: HealthStatus = HealthStatus.UNKNOWN
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    out_dir: str | None = None

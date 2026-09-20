@@ -1,0 +1,93 @@
+{
+  "genre": "dnb",
+  "label": "Drum & Bass",
+  "grammar": {
+    "short": [
+      "intro:8",
+      "build:8",
+      "drop:16",
+      "outro:8"
+    ],
+    "balanced": [
+      "intro:16",
+      "build:8",
+      "drop:32",
+      "breakdown:16",
+      "build:8",
+      "drop:32",
+      "outro:16"
+    ],
+    "full": [
+      "intro:16",
+      "build:8",
+      "drop:32",
+      "breakdown:16",
+      "build:8",
+      "drop:32",
+      "breakdown:8",
+      "drop:32",
+      "outro:16"
+    ]
+  },
+  "energy": {
+    "intro": 0.25,
+    "verse": 0.55,
+    "pre": 0.75,
+    "hook": 0.95,
+    "chorus": 0.95,
+    "build": 0.8,
+    "drop": 1.0,
+    "bridge": 0.4,
+    "breakdown": 0.3,
+    "outro": 0.2
+  },
+  "role_weights": {
+    "kick": 0.2,
+    "snare": 0.15,
+    "hats": 0.1,
+    "perc": 0.05,
+    "bass": 0.2,
+    "chords": 0.15,
+    "melody": 0.15,
+    "counter": 0.1,
+    "vocal": 0.1,
+    "fx": 0.05,
+    "unknown": 0.0
+  },
+  "role_priority": [
+    "bass",
+    "kick",
+    "snare",
+    "hats",
+    "melody",
+    "chords",
+    "perc",
+    "counter",
+    "fx",
+    "vocal"
+  ],
+  "entry_rules": [
+    {
+      "role": "bass",
+      "not_before": "drop",
+      "absent_from": [
+        "intro",
+        "breakdown"
+      ]
+    },
+    {
+      "role": "snare",
+      "absent_from": [
+        "intro"
+      ]
+    }
+  ],
+  "dropout_before": [
+    "drop"
+  ],
+  "rules": [
+    "breakbeat drives the drop",
+    "sub bass defines the drop",
+    "half-time breakdown between drops"
+  ]
+}

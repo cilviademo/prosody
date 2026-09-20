@@ -1,6 +1,6 @@
 {
-  "genre": "hiphop",
-  "label": "Hip-Hop",
+  "genre": "trap",
+  "label": "Trap",
   "grammar": {
     "short": [
       "intro:4",
@@ -10,22 +10,22 @@
       "outro:4"
     ],
     "balanced": [
-      "intro:4",
+      "intro:8",
       "hook:8",
       "verse:16",
       "hook:8",
       "verse:16",
-      "bridge:8",
+      "breakdown:8",
       "hook:16",
       "outro:4"
     ],
     "full": [
-      "intro:4",
+      "intro:8",
       "hook:8",
       "verse:16",
       "hook:8",
       "verse:16",
-      "bridge:8",
+      "breakdown:8",
       "hook:16",
       "verse:8",
       "hook:16",
@@ -33,15 +33,15 @@
     ]
   },
   "energy": {
-    "intro": 0.3,
-    "verse": 0.55,
-    "pre": 0.7,
-    "hook": 0.9,
-    "chorus": 0.9,
-    "build": 0.75,
+    "intro": 0.25,
+    "verse": 0.6,
+    "pre": 0.75,
+    "hook": 0.95,
+    "chorus": 0.95,
+    "build": 0.8,
     "drop": 1.0,
-    "bridge": 0.4,
-    "breakdown": 0.3,
+    "bridge": 0.35,
+    "breakdown": 0.25,
     "outro": 0.2
   },
   "role_weights": {
@@ -58,12 +58,12 @@
     "unknown": 0.0
   },
   "role_priority": [
-    "chords",
     "melody",
     "kick",
     "snare",
-    "bass",
     "hats",
+    "bass",
+    "chords",
     "perc",
     "counter",
     "vocal",
@@ -78,18 +78,17 @@
       ]
     },
     {
-      "role": "counter",
-      "not_before": "verse",
-      "absent_from": [
-        "intro"
-      ]
+      "role": "chords",
+      "absent_from": []
     }
   ],
   "dropout_before": [
-    "hook"
+    "hook",
+    "drop"
   ],
   "rules": [
-    "808 enters with the first hook",
-    "drum dropout on the last bar before each hook"
+    "hats carry the groove",
+    "808 slides define the hook",
+    "half-time breakdown before the final hook"
   ]
 }

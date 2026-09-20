@@ -1,16 +1,16 @@
 {
-  "genre": "rnb",
-  "label": "R&B",
+  "genre": "pop",
+  "label": "Pop",
   "grammar": {
     "short": [
-      "intro:8",
-      "verse:16",
+      "intro:4",
+      "verse:8",
       "pre:4",
       "chorus:8",
-      "outro:8"
+      "outro:4"
     ],
     "balanced": [
-      "intro:8",
+      "intro:4",
       "verse:16",
       "pre:4",
       "chorus:8",
@@ -19,15 +19,15 @@
       "chorus:8",
       "bridge:8",
       "chorus:8",
-      "outro:8"
+      "outro:4"
     ],
     "full": [
       "intro:8",
       "verse:16",
-      "pre:4",
+      "pre:8",
       "chorus:8",
       "verse:16",
-      "pre:4",
+      "pre:8",
       "chorus:8",
       "bridge:8",
       "chorus:16",
@@ -35,13 +35,13 @@
     ]
   },
   "energy": {
-    "intro": 0.25,
-    "verse": 0.5,
-    "pre": 0.68,
-    "hook": 0.85,
-    "chorus": 0.85,
-    "build": 0.7,
-    "drop": 0.9,
+    "intro": 0.3,
+    "verse": 0.55,
+    "pre": 0.7,
+    "hook": 0.9,
+    "chorus": 0.9,
+    "build": 0.75,
+    "drop": 1.0,
     "bridge": 0.4,
     "breakdown": 0.3,
     "outro": 0.2
@@ -63,9 +63,9 @@
     "chords",
     "melody",
     "vocal",
-    "bass",
     "kick",
     "snare",
+    "bass",
     "hats",
     "counter",
     "perc",
@@ -78,22 +78,13 @@
       "absent_from": [
         "intro"
       ]
-    },
-    {
-      "role": "perc",
-      "not_before": "chorus",
-      "absent_from": [
-        "intro",
-        "verse"
-      ]
     }
   ],
   "dropout_before": [
     "chorus"
   ],
   "rules": [
-    "longer intro, chords lead",
-    "percussion thinned in verses",
-    "drums out for the last bar before each chorus"
+    "pre-chorus lifts into the chorus",
+    "full arrangement by the second chorus"
   ]
 }

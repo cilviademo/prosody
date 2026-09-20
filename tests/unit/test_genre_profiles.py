@@ -7,8 +7,20 @@ from flpfinisher.model.roles import Role
 from flpfinisher.model.schemas import GenreProfile, SectionType
 
 
-def test_v1_ships_hiphop_and_rnb():
-    assert profiles.available() == ["hiphop", "rnb"]
+def test_v1_ships_six_genres():
+    assert set(profiles.available()) == {
+        "hiphop", "trap", "rnb", "pop", "edm", "dnb"
+    }
+
+
+def test_genres_are_listed_in_presentation_order_not_alphabetically():
+    """The picker leads with hip-hop, not whatever sorts first."""
+    assert profiles.available()[:3] == ["hiphop", "rnb", "pop"]
+
+
+def test_every_profile_has_a_display_label():
+    for genre in profiles.available():
+        assert profiles.load(genre).label
 
 
 @pytest.mark.parametrize("genre", profiles.available())

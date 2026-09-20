@@ -19,8 +19,15 @@ from flpfinisher.model.schemas import GenreProfile
 PROFILE_DIR = Path(__file__).resolve().parent
 
 
+#: Presentation order for the genre picker. Genres not listed here follow,
+#: alphabetically, so adding a profile file is still all that is required.
+DISPLAY_ORDER: tuple[str, ...] = ("hiphop", "rnb", "pop", "trap", "edm", "dnb")
+
+
 def available() -> list[str]:
-    return sorted(p.stem for p in PROFILE_DIR.glob("*.json"))
+    found = {p.stem for p in PROFILE_DIR.glob("*.json")}
+    ordered = [name for name in DISPLAY_ORDER if name in found]
+    return ordered + sorted(found - set(ordered))
 
 
 @cache

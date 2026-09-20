@@ -2,9 +2,9 @@
 
 How FLP Finisher is put together, and which boundaries are load-bearing.
 
-Status: Phase 1 vertical slice implemented (parse → analyse → health → JSON).
-Everything past the parse boundary is contract-only until its phase lands.
-See ROADMAP.md for what exists and PHASE_REPORT.md for what has been measured.
+Status: the full loop is implemented — drop → analyse → classify → plan →
+write derivative `.flp` → export. Audio rendering and stems are written but
+unexercised against FL Studio. See CURRENT_STATUS.md for the precise state.
 
 ---
 
@@ -48,7 +48,9 @@ plan that fails validation cannot reach the engine, whatever produced it.
 | Analysis | `health/`, `classify/` | `model/` | Pure functions over models; no file I/O |
 | Arrangement | `arrange/` | `model/` | Genre behaviour is JSON data, not functions |
 | Orchestration | `pipeline.py` | all of the above | Stage functions: paths/models in, paths/models out, no globals |
-| Interface | `cli.py` | `pipeline.py` | Parse arguments, call one stage function, render the result |
+| Orchestration | `build.py` | stages | One call per user action; every stage reports its own outcome |
+| Interface | `api.py`, `cli.py` | `build.py` | Marshal arguments, call one function, serialise the result |
+| Desktop | `apps/desktop` | `api.py` over stdio | Tauri + React; no business logic |
 
 The import direction is strictly downward. `model/` imports nothing from the
 application; `cli.py` imports everything.
@@ -70,6 +72,42 @@ third party can break us:
 
 There is deliberately no dependency-injection framework, no plugin registry and
 no event bus. Stage functions are called directly.
+
+## 2a. The desktop shell
+
+```
+apps/desktop/
+  src/                React UI: views, components, a typed API client
+  src-tauri/          Rust window: locates Python, forwards calls, opens files
+```
+
+The Rust layer does four things a browser cannot: pick files, reveal a folder,
+launch FL Studio, and read a render back for the preview player. Everything
+else is a call into the Python API.
+
+**The bridge is one short-lived process per call**, speaking line-delimited
+JSON on stdout: `{"event":"progress",…}` lines, then one `{"event":"result",…}`.
+A backend crash therefore cannot take the window down, and long builds stream
+stage-by-stage progress without a socket or a daemon.
+
+In release builds the backend ships as a bundled resource; in debug builds the
+repository checkout wins, so editing Python takes effect on the next call
+instead of the next `cargo build`. Getting that precedence backwards silently
+pins a stale snapshot of the backend — it cost an hour once already.
+
+## 2b. The writer
+
+The derivative writer does **not** use `pyflp.save()`, which rebuilds every
+event from its parsed value and recomputes the header. Instead
+`write/eventstream.py` reads the file as an ordered list of
+`(id, raw_payload)` pairs and writes exactly those bytes back, substituting
+only the playlist event and inserting section markers.
+
+Everything else — plugin state, automation, mixer routing, sample references,
+and events no parser understands — survives because it is literally the same
+bytes. A round trip with no edits is byte-identical, which is asserted by a
+test. That is what makes Preserve Composition structural: at Level 0 the
+writer has no code path that can alter a note.
 
 ## 3. Data contract
 
@@ -103,7 +141,10 @@ These are the product's reason to exist, so none of them is left to convention.
 | Low-confidence guesses are never facts | `RoleAssignment.is_confident` against `CONFIDENCE_THRESHOLD` | `test_no_name_only_guess_ever_reaches_the_confidence_threshold` |
 | Uncertainty is never hidden | `HealthCheck.ok` is `bool \| None`; `None` drags status to `UNKNOWN` | `test_undeterminable_checks_report_none_not_a_pass` |
 | One bad file never kills a batch | `scan_directory` catches per-file and records a row | `test_one_unparseable_file_does_not_stop_the_batch` |
-| Unknown FLP events are preserved | `BeatProject.unknown_event_ids` | `test_pyflp_compat.py::test_unknown_ids_become_pseudo_members_rather_than_raising` |
+| Unknown FLP events are preserved | Byte-exact event stream; `unknown_event_ids` | `test_write.py::test_reading_and_rewriting_is_byte_identical` |
+| Note content is never altered at Level 0 | Writer only replaces the playlist event | `test_write.py::test_note_content_is_byte_identical` |
+| A missing capability is never faked | Strategies report availability; stages report SKIPPED with a reason | `test_extract.py::test_stems_never_fabricate_audio` |
+| No project data leaves the machine | No network imports anywhere in the package | `test_boundaries.py::test_no_network_capability_anywhere_in_the_package` |
 
 ## 5. Graceful degradation
 
@@ -143,13 +184,27 @@ preserves the shape.
 `HealthReport.recommended_mode` already routes between them: a project with
 missing samples reports `stem`. Neither engine is implemented.
 
-## 8. What is deliberately absent
+## 8. Output tiers
 
-No UI, web server, Tauri, React or Docker (EXECUTE.md). No SQLite index yet —
-the schema is designed but writing it before the parser is trusted would be
-indexing unverified data. No LLM call anywhere in the codebase. No genre planner.
-No FLP writer.
+A build always produces the strongest result it safely can:
 
-The reason is ordering, not oversight: SPEC.md section 2 rule 6 is "fixtures over
-assumptions", and Phase 0's spikes are not all answerable on this machine. See
-PHASE_REPORT.md.
+- **NATIVE** — an editable derivative `.flp` that passed structural validation
+  (re-parses; pattern, channel, note, plugin and mixer counts equal the
+  original; playlist length matches the plan; header copied verbatim).
+- **PACK** — an Arrangement Pack: the plan, per-role MIDI, and any audio that
+  rendered. Used when the writer cannot safely rewrite a project, or when the
+  derivative fails validation. The derivative is deleted rather than shipped
+  unverified, and the UI says so in plain language.
+
+The tier is decided by the validator, not by optimism.
+
+## 9. What is deliberately absent
+
+No LLM network code — the provider interface exists and the implementations
+declare themselves unavailable rather than pretending. No GUI stem automation:
+its click path must be verified against a real FL install before it is written,
+and a blind implementation would silently click the wrong dialog. No batch
+queue yet; `Job`/`JobStatus` exist in the domain model and the scan loop is
+still synchronous.
+
+CURRENT_STATUS.md lists all of it, with what would move each item.
