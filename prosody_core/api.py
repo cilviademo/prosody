@@ -32,6 +32,7 @@ from prosody_core.extract import render_fl
 from prosody_core.extract import stems as stems_module
 from prosody_core.fs.safety import sha256_file
 from prosody_core.fs.source import WorkingCopy, temporary_copy, working_copy
+from prosody_core.health import systemcheck
 from prosody_core.health.check import check_project, classify_state, human_status
 from prosody_core.index import db
 from prosody_core.model.roles import Role
@@ -529,6 +530,13 @@ def h_library(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     }
 
 
+def h_system_check(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Every capability, its verdict and why (HARDENING P1.4)."""
+    result = systemcheck.run(workspace)
+    result["report"] = systemcheck.sanitized_report(workspace)
+    return result
+
+
 def h_library_rebuild(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     """Reconstruct the library by rescanning the export folder.
 
@@ -645,6 +653,7 @@ HANDLERS: dict[str, Handler] = {
     "library.list": h_library,
     "library.forget": h_library_forget,
     "library.rebuild": h_library_rebuild,
+    "system.check": h_system_check,
     "project.verify": h_verify,
     "fl.test": h_test_fl,
 }

@@ -536,3 +536,43 @@ pre.data {
   color: var(--text);
   font-weight: 600;
 }
+
+/* System check table. The verdict is encoded in lightness, not colour — the
+   interface is monochrome, and a verdict is a reading, not an alarm. */
+.check {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.check tr {
+  border-top: 1px solid var(--line);
+}
+
+.check td {
+  padding: 7px 10px 7px 0;
+  vertical-align: top;
+}
+
+.check-verdict {
+  width: 104px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.check-name { width: 172px; color: var(--text); }
+.check-detail { color: var(--text-secondary); }
+
+/* PASS recedes; the things that need reading are brighter. */
+.check tr[data-verdict="PASS"] .check-verdict { color: var(--text-faint); }
+.check tr[data-verdict="WARNING"] .check-verdict { color: var(--text); }
+.check tr[data-verdict="UNAVAILABLE"] .check-verdict { color: var(--text-muted); }
+.check tr[data-verdict="FAIL"] .check-verdict {
+  color: var(--text-inverse);
+  background: var(--text);
+  padding-left: 8px;
+  font-weight: 600;
+}

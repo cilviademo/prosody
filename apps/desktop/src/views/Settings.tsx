@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { Env, Settings as SettingsShape } from "../lib/types";
+import type { Env, Settings as SettingsShape, SystemCheck } from "../lib/types";
 import { api, shell } from "../lib/api";
 import {
   Advanced, Button, KeyValues, Note, Section, Segmented,
@@ -15,6 +15,9 @@ export function SettingsView({
 }) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [check, setCheck] = useState<SystemCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const flPath = settings.fl_executable ?? env?.flExecutable ?? null;
 
@@ -199,6 +202,67 @@ export function SettingsView({
           )}
         </Section>
       </div>
+
+      <Section
+        title="System check"
+        meta="checked now, not assumed"
+      >
+        <div className="row">
+          <Button
+            onClick={async () => {
+              setChecking(true);
+              setCopied(false);
+              try {
+                setCheck(await api.systemCheck());
+              } finally {
+                setChecking(false);
+              }
+            }}
+            disabled={checking}
+          >
+            {checking ? "Checking…" : "Run system check"}
+          </Button>
+          {check && (
+            <Button
+              onClick={async () => {
+                // The report has the user's profile path replaced with ~ and
+                // never contains an API key.
+                try {
+                  await navigator.clipboard.writeText(check.report);
+                  setCopied(true);
+                } catch {
+                  setCopied(false);
+                }
+              }}
+            >
+              {copied ? "Copied" : "Copy report"}
+            </Button>
+          )}
+        </div>
+
+        {check && (
+          <>
+            <Note>
+              {check.counts.PASS} pass · {check.counts.WARNING} warning ·{" "}
+              {check.counts.UNAVAILABLE} unavailable · {check.counts.FAIL} fail
+              {check.ok
+                ? " — nothing is broken."
+                : " — something that should work does not."}
+            </Note>
+            <table className="check">
+              <tbody>
+                {check.rows.map((row) => (
+                  <tr key={row.name} data-verdict={row.verdict}>
+                    <td className="check-verdict">{row.verdict}</td>
+                    <td className="check-name">{row.name}</td>
+                    <td className="check-detail">{row.detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </Section>
 
       <Advanced title="Environment">
         {env && (

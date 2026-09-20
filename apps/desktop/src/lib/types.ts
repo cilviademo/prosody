@@ -146,3 +146,18 @@ export interface BackendStatus {
   coreExecutable?: string;
   error?: string;
 }
+
+export type Verdict = "PASS" | "WARNING" | "UNAVAILABLE" | "FAIL";
+
+export interface SystemCheckRow {
+  name: string;
+  verdict: Verdict;
+  detail: string;
+}
+
+export interface SystemCheck {
+  rows: SystemCheckRow[];
+  counts: Record<Verdict, number>;
+  ok: boolean;
+  report: string;
+}
