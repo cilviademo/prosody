@@ -316,10 +316,30 @@ def build(
                 f for f, want in (("wav", options.want_wav), ("mp3", options.want_mp3))
                 if want
             )
-            render_target = flp_path or source
-            result = render_fl.render_project(
-                render_target, out_dir / "preview", formats=formats, env=env,
+            render_target = flp_path or working
+
+            # Check the disk before launching FL: a render that runs out of
+            # space leaves a truncated WAV and a machine with nothing left
+            # (HARDENING P0.5).
+            minutes = (plan.total_bars if plan else project.length_bars) * 4 * 60 / (
+                project.tempo or 120
+            ) / 60
+            needed = render_fl.estimate_render_bytes(
+                minutes, stem_count=len(analysis.roles) if options.want_stems else 0
             )
+            enough, headroom = render_fl.disk_headroom(out_dir, needed)
+            if not enough:
+                # Reported by the shared handler below, like any other
+                # unsuccessful render, so there is one place that decides.
+                result = render_fl.RenderResult(ok=False, message=headroom)
+            else:
+                result = render_fl.render_project(
+                    render_target, out_dir / "preview", formats=formats, env=env,
+                    timeout=render_fl.render_timeout(
+                        minutes,
+                        stem_count=len(analysis.roles) if options.want_stems else 0,
+                    ),
+                )
             (out_dir / "reports" / "render.json").write_text(
                 json.dumps(result.as_log(), indent=2) + "\n", encoding="utf-8"
             )
@@ -342,7 +362,8 @@ def build(
                 )
             else:
                 recorder.finish(
-                    "Rendering audio", StageStatus.FAILED,
+                    "Rendering audio",
+                    StageStatus.WARNING if result.closed_by_user else StageStatus.FAILED,
                     result.message or "FL Studio did not produce audio",
                 )
 

@@ -16,12 +16,15 @@ confirmed on a real install, so :func:`export_midi` refuses rather than guessing
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from prosody_core.env import Environment, describe
+from prosody_core.extract import procguard
 
 DEFAULT_TIMEOUT = 600  # seconds; VST-heavy projects are slow
 
@@ -40,10 +43,16 @@ class RenderResult:
     stderr: str = ""
     outputs: list[Path] = field(default_factory=list)
     message: str = ""
+    #: FL ran, failed, and wrote nothing — almost always a closed window.
+    closed_by_user: bool = False
 
     def as_log(self) -> dict[str, object]:
         return {
+            # The exact argv, so Diagnostics can show what was actually run
+            # rather than a reconstruction (HARDENING P0.5).
+            "argv": list(self.command),
             "command": " ".join(self.command),
+            "closed_by_user": self.closed_by_user,
             "exit_code": self.exit_code,
             "seconds": round(self.seconds, 2),
             "outputs": [str(p) for p in self.outputs],
@@ -66,6 +75,64 @@ def availability(env: Environment | None = None) -> tuple[bool, str]:
     return True, f"FL Studio at {env.fl_executable}"
 
 
+#: Never less than ten minutes, because a cold FL Studio with a heavy plugin
+#: set can take that long before it renders a single bar.
+MIN_RENDER_TIMEOUT = 600
+
+
+def render_timeout(project_minutes: float, stem_count: int = 0) -> int:
+    """How long to wait for a render (HARDENING P0.5).
+
+    Three times real time per minute of music, floored at ten minutes. Offline
+    rendering is usually faster than real time, so this is generous — which is
+    the point: killing a legitimate render is worse than waiting.
+    """
+    lanes = max(1, stem_count)
+    estimate = 60.0 * max(0.0, project_minutes) * 3.0 * lanes
+    return int(max(MIN_RENDER_TIMEOUT, estimate))
+
+
+def estimate_render_bytes(
+    minutes: float,
+    *,
+    sample_rate: int = 44_100,
+    channels: int = 2,
+    bytes_per_sample: int = 3,
+    stem_count: int = 0,
+) -> int:
+    """Rough size of what a render will write, for the disk check."""
+    seconds = max(0.0, minutes) * 60.0
+    per_lane = seconds * sample_rate * channels * bytes_per_sample
+    return int(per_lane * (1 + max(0, stem_count)) * 1.2)
+
+
+def disk_headroom(destination: Path, needed_bytes: int) -> tuple[bool, str]:
+    """Whether ``destination``'s volume has room, and what to say if not.
+
+    Checked before FL is launched: a render that fills the disk half-way
+    through leaves a truncated WAV and, worse, a machine with no space left
+    for anything else.
+    """
+    try:
+        usage = shutil.disk_usage(_existing_ancestor(destination))
+    except OSError as exc:
+        return True, f"could not check free space ({exc})"
+    if usage.free >= needed_bytes:
+        return True, f"{usage.free / 1e9:.1f} GB free, about {needed_bytes / 1e9:.1f} GB needed"
+    return False, (
+        f"about {needed_bytes / 1e9:.1f} GB is needed to render this and only "
+        f"{usage.free / 1e9:.1f} GB is free on {_existing_ancestor(destination)}"
+    )
+
+
+def _existing_ancestor(path: Path) -> Path:
+    """The nearest folder that exists, so disk_usage has something to stat."""
+    candidate = Path(path)
+    while not candidate.exists() and candidate != candidate.parent:
+        candidate = candidate.parent
+    return candidate
+
+
 def _run(command: list[str], timeout: int) -> tuple[int | None, str, str, float]:
     """Run FL and capture everything. Never raises.
 
@@ -73,25 +140,49 @@ def _run(command: list[str], timeout: int) -> tuple[int | None, str, str, float]
     picked in the dialog, a permissions problem, a half-copied install. That
     has to come back as a failed render with a readable reason, not an
     exception the UI reports as "internal".
+
+    The process is put in a job object that terminates it if Prosody dies, so
+    a crash cannot leave a headless FL Studio running with no window to find
+    (HARDENING P0.5).
     """
     started = time.monotonic()
+    creation_flags = 0
+    if os.name == "nt":  # CREATE_NO_WINDOW: FL shows its own window anyway.
+        creation_flags = 0x08000000
+
     try:
-        completed = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout, check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or ""
-        if isinstance(stdout, bytes):
-            stdout = stdout.decode("utf-8", "replace")
-        return None, stdout, f"timed out after {timeout}s", time.monotonic() - started
+        with procguard.ProcessGuard() as guard:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=creation_flags,
+            )
+            guard.adopt(process)
+            try:
+                stdout, stderr = process.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # Kill only what we started. The job object would do it when
+                # this scope exits, but being explicit means the wait below
+                # cannot hang.
+                process.kill()
+                stdout, stderr = process.communicate()
+                return (
+                    None,
+                    stdout or "",
+                    f"timed out after {timeout}s and was stopped",
+                    time.monotonic() - started,
+                )
     except OSError as exc:
         return None, "", f"could not start FL Studio: {exc.strerror or exc}", (
             time.monotonic() - started
         )
+
     return (
-        completed.returncode,
-        completed.stdout or "",
-        completed.stderr or "",
+        process.returncode,
+        stdout or "",
+        stderr or "",
         time.monotonic() - started,
     )
 
@@ -126,8 +217,19 @@ def render_project(
 
     success = code == 0 and bool(produced)
     message = ""
+    closed_by_user = False
     if code is None:
         message = stderr or "FL Studio did not run"
+    elif code != 0 and not produced:
+        # FL ran, ended with a non-zero code, and wrote nothing. By far the
+        # commonest cause is the user closing FL's window while it rendered —
+        # which is a thing that happened, not a fault to report as a crash
+        # (HARDENING P0.5).
+        closed_by_user = True
+        message = (
+            "FL Studio closed before it finished rendering. If you closed its "
+            f"window, start the build again and leave it alone. (exit code {code})"
+        )
     elif code != 0:
         message = f"FL Studio exited with {code}"
     elif not produced:
@@ -136,6 +238,7 @@ def render_project(
     return RenderResult(
         ok=success, command=command, exit_code=code, seconds=seconds,
         stdout=stdout, stderr=stderr, outputs=produced, message=message,
+        closed_by_user=closed_by_user,
     )
 
 
