@@ -54,11 +54,18 @@ Verified by running it here, on Linux, against synthetic projects.
   all written; the spec is proven on Linux. The Windows path has never
   executed. **Expect the first tag build to need one fix** — a missing DLL or a
   resource path is the usual shape.
-- **The release has not been tagged.** This session's credentials can push the
-  working branch but are refused (HTTP 403) on tag refs, and lack
-  `actions: write` to dispatch the workflow manually. The workflow is committed
-  and registered; someone with write access has to run
-  `git tag v0.1.0 && git push origin v0.1.0` to produce the artefacts.
+- **The release has not been built.** This session's credentials can push the
+  working branch but are refused (HTTP 403) on tag refs, and the GitHub
+  integration lacks `actions: write` to dispatch a run. The workflow is
+  committed and registered, and `claude/flstudio-utility-architecture-haaha9`
+  is the repository's default branch, so either of these produces the
+  artefacts:
+
+  * **Actions → release → Run workflow** (no tag needed), or
+  * `git tag v0.1.0 && git push origin v0.1.0`
+
+  The `ci` workflow does run automatically on every push and is green on the
+  current head.
 - **WebView2 detection** reads the Edge Update registry keys under HKLM and
   HKCU. The logic compiles and is Windows-only, so it has not been exercised.
 - **Window geometry** is saved on resize; it is not yet restored on launch or
