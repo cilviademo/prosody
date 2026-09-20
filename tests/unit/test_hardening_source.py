@@ -263,3 +263,22 @@ def test_previewing_a_plan_leaves_nothing_on_disk(tmp_path, make_flp):
     new = set(tmp_path.rglob("*")) - before
     leftover = [p for p in new if "Cache" in p.parts]
     assert leftover == [], f"a preview left files in the cache: {leftover}"
+
+
+def test_the_cache_lives_in_the_state_root_not_beside_exports(tmp_path, make_flp):
+    """Exports may be a OneDrive-synced folder; scratch copies must not sync.
+
+    The build derived its cache from the export root, which put working copies
+    of the user's projects inside Documents.
+    """
+    from prosody_core.api import HANDLERS
+    from prosody_core.workspace import Workspace
+    from tests.fixtures.projects import full_kit
+
+    workspace = Workspace.open(tmp_path / "docs", tmp_path / "state")
+    source = make_flp(full_kit())
+    HANDLERS["build.run"]({"path": str(source), "genre": "rnb"}, workspace)
+
+    assert (workspace.cache / "jobs").is_dir(), "no working copy in the state cache"
+    stray = list((tmp_path / "docs").rglob("jobs"))
+    assert stray == [], f"working copies landed under Documents: {stray}"

@@ -14,6 +14,7 @@ from prosody_core.model.schemas import (
     ArrangementPlan,
     BeatProject,
     HealthCheck,
+    ValidationLevel,
     ValidationResult,
 )
 from prosody_core.parse.adapter import ParseError, ParserBackend
@@ -54,7 +55,9 @@ def validate_derivative(
             HealthCheck(name="reparses", ok=False, detail=f"{exc.cause}")
         )
         return ValidationResult(
-            project_id=original.id, passed=False, checks=tuple(checks)
+            project_id=original.id, passed=False, checks=tuple(checks),
+            level=ValidationLevel.FAILED,
+            level_detail="the generated file could not be parsed back",
         )
 
     checks.append(
@@ -117,8 +120,25 @@ def validate_derivative(
         )
 
     passed = all(c.ok is not False for c in checks)
+
+    # The ladder stops where the evidence stops (HARDENING P1.1). There is no
+    # independent parser bundled, so SEMANTICALLY_VALIDATED is not reachable
+    # here and the reason is recorded rather than the level being inflated.
+    if not passed:
+        failed = [c.name for c in checks if c.ok is False]
+        level = ValidationLevel.FAILED
+        detail = "failed: " + ", ".join(failed)
+    else:
+        level = ValidationLevel.STRUCTURALLY_VALIDATED
+        detail = (
+            "re-parsed and every count matches the source. Semantic validation "
+            "needs an independent parser, which this build does not bundle; FL "
+            "Studio validation happens when a render succeeds."
+        )
+
     return ValidationResult(
-        project_id=original.id, passed=passed, checks=tuple(checks)
+        project_id=original.id, passed=passed, checks=tuple(checks),
+        level=level, level_detail=detail,
     )
 
 

@@ -471,6 +471,10 @@ def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
         path, export_root=export_root, options=options,
         project=project, analysis=analysis,
         env=describe(settings), progress=progress,
+        # Cache belongs in the state root, not beside Exports: the export root
+        # can be anywhere the user chose, including a OneDrive-synced Documents,
+        # and scratch copies of their projects have no business syncing.
+        cache_root=workspace.cache,
     )
 
     db.record_build(

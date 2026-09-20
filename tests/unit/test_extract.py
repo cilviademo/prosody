@@ -17,6 +17,7 @@ from prosody_core.extract.stems import (
 )
 from prosody_core.health.check import classify_state
 from prosody_core.parse.pyflp_backend import PyFLPBackend
+from tests.fixtures.binaries import fake_fl
 from tests.fixtures.projects import full_kit
 
 
@@ -210,8 +211,7 @@ def test_render_is_unavailable_without_fl_studio():
 
 
 def test_render_is_unavailable_when_rendering_is_turned_off(tmp_path):
-    fake = tmp_path / "FL64.exe"
-    fake.write_bytes(b"")
+    fake = fake_fl(tmp_path)
     ok, reason = render_fl.availability(
         offline_env(fl_executable=fake, render_enabled=False)
     )

@@ -42,6 +42,7 @@ from prosody_core.model.schemas import (
     StageStatus,
 )
 from prosody_core.parse.pyflp_backend import PyFLPBackend
+from prosody_core.validate import midi_check
 from prosody_core.validate.validator import validate_derivative
 from prosody_core.write.flp_writer import WriteUnsupported, write_arrangement
 
@@ -159,8 +160,11 @@ def build(
     # downstream can reach the user's file even by mistake — and a source that
     # FL Studio currently has open is still a stable set of bytes to parse
     # (HARDENING P0.3).
+    # Falls back beside Exports only when no cache root was given, which is the
+    # CLI's direct-call path; the app always passes the state root.
+    cache = Path(cache_root) if cache_root else (export_root.parent / "Cache")
     try:
-        copy = working_copy(source, cache_root or (export_root.parent / "Cache"))
+        copy = working_copy(source, cache)
         working = copy.path
     except (OSError, SourceChanged) as exc:
         raise SourceChanged(f"could not take a working copy of {source}: {exc}") from exc
@@ -256,12 +260,26 @@ def build(
                         (artifact(ArtifactKind.FLP, destination, destination.name),),
                     )
                 else:
-                    destination.unlink(missing_ok=True)
+                    # Keep the file, out of Exports. Deleting it destroys the
+                    # only evidence of why the writer got it wrong, and an
+                    # unvalidated project must never look like a deliverable
+                    # (HARDENING P1.1).
                     failed = [c.name for c in result.checks if c.ok is False]
+                    quarantine = cache / "unvalidated"
+                    quarantine.mkdir(parents=True, exist_ok=True)
+                    kept = quarantine / f"{destination.stem}.unvalidated.flp"
+                    try:
+                        destination.replace(kept)
+                    except OSError:
+                        # Different volume, or the file is gone; either way the
+                        # build must not stop over where a diagnostic landed.
+                        destination.unlink(missing_ok=True)
+                        kept = None
                     recorder.finish(
                         "Writing FL Studio project", StageStatus.WARNING,
                         f"validation failed ({', '.join(failed)}); building an "
-                        "Arrangement Pack instead",
+                        "Arrangement Pack instead"
+                        + (f". The unvalidated file is kept at {kept}" if kept else ""),
                     )
             except (WriteUnsupported, PermissionDenied) as exc:
                 destination.unlink(missing_ok=True)
@@ -283,9 +301,29 @@ def build(
         try:
             files = write_role_midi(project, analysis, out_dir / "midi")
             if files:
+                # A .mid that exists is not a .mid that is right, and a wrong
+                # one is invisible until the user drags it into a DAW and hears
+                # nothing. Reopen every file we just wrote (HARDENING P1.3).
+                checks = [midi_check.reopens(f) for f in files]
+                _dump_json(
+                    out_dir / "reports" / "midi-verification.json",
+                    [c.as_dict() for c in checks],
+                )
+                broken = [c for c in checks if not c.ok]
                 recorder.finish(
-                    "Exporting MIDI", StageStatus.OK, f"{len(files)} role files",
-                    tuple(artifact(ArtifactKind.MIDI, f, f.name) for f in files),
+                    "Exporting MIDI",
+                    StageStatus.WARNING if broken else StageStatus.OK,
+                    f"{len(files)} role files"
+                    + (
+                        f" · {len(broken)} could not be read back: "
+                        f"{broken[0].path.name} — {broken[0].detail}"
+                        if broken
+                        else ", all verified by reopening them"
+                    ),
+                    tuple(
+                        artifact(ArtifactKind.MIDI, c.path, c.path.name)
+                        for c in checks if c.ok
+                    ),
                 )
             else:
                 recorder.finish(
@@ -461,6 +499,11 @@ def _message(tier: OutputTier, options: BuildOptions) -> str:
 def _setting(env: Environment, default: str) -> str:
     del env
     return default
+
+
+def _dump_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def _dump(path: Path, model: object) -> None:

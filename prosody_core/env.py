@@ -228,9 +228,13 @@ def describe(settings: Mapping[str, object] | None = None) -> Environment:
     # A path that exists is not yet a program that can run. Reading two fields
     # of the PE header here turns "the render failed" into "that file is
     # 32-bit" (HARDENING P0.1).
+    # Checked on every platform, not just Windows: the logic is identical, and
+    # gating it on the host meant the Linux test suite could not see it. It
+    # didn't, either — a fixture writing an empty file named FL64.exe passed
+    # here and failed on the Windows runner.
     architecture: str | None = None
     architecture_ok = True
-    if fl_exe is not None and sys.platform == "win32":
+    if fl_exe is not None:
         architecture_ok, architecture = pe.describe(fl_exe)
         if not architecture_ok:
             how = f"{how}, but it is {architecture}"

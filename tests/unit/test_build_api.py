@@ -15,6 +15,7 @@ from prosody_core.fs.safety import sha256_file
 from prosody_core.index import db
 from prosody_core.model.schemas import OutputTier, PermissionLevel, StageStatus
 from prosody_core.workspace import Workspace
+from tests.fixtures.binaries import fake_fl
 from tests.fixtures.projects import full_kit, melody_only, no_notes
 
 
@@ -390,8 +391,7 @@ def test_stored_fl_path_is_used_over_discovery(workspace, tmp_path):
     """The Settings screen saves a path; the environment must honour it."""
     from prosody_core.env import describe
 
-    fake = tmp_path / "FL64.exe"
-    fake.write_bytes(b"")
+    fake = fake_fl(tmp_path)
     env = describe({"fl_executable": str(fake)})
     assert env.fl_executable == fake
     assert "Settings" in env.fl_discovery
@@ -422,8 +422,7 @@ def test_the_environment_flag_still_works_for_the_cli(monkeypatch):
 
 
 def test_environment_endpoint_reflects_saved_settings(workspace, tmp_path):
-    fake = tmp_path / "FL64.exe"
-    fake.write_bytes(b"")
+    fake = fake_fl(tmp_path)
     call("settings.set",
          {"settings": {"fl_executable": str(fake), "render_enabled": True}},
          workspace)

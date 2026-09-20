@@ -450,11 +450,34 @@ class GenreProfile(_Base):
 # --------------------------------------------------------------------------- #
 
 
+class ValidationLevel(str, Enum):
+    """How far a generated project got, in order (HARDENING P1.1).
+
+    Each level requires the one before it, and the reached level is shown to
+    the user rather than collapsed into "success" — "a file was produced" and
+    "FL Studio opened it and rendered it" are very different claims.
+    """
+
+    #: The writer produced a file. Nothing has been checked.
+    GENERATED = "GENERATED"
+    #: Re-parsed, and every count that must match the source does.
+    STRUCTURALLY_VALIDATED = "STRUCTURALLY_VALIDATED"
+    #: An independent parser confirmed only permitted differences.
+    SEMANTICALLY_VALIDATED = "SEMANTICALLY_VALIDATED"
+    #: FL Studio opened it and rendered it to the expected length.
+    FL_STUDIO_VALIDATED = "FL_STUDIO_VALIDATED"
+    #: The writer produced a file that failed a check. Not fit to hand over.
+    FAILED = "FAILED"
+
+
 class ValidationResult(_Base):
     schema_version: str = SCHEMA_VERSION
     project_id: str
     passed: bool
     checks: tuple[HealthCheck, ...] = ()
+    level: ValidationLevel = ValidationLevel.GENERATED
+    #: Why the next level was not reached, when something could be said.
+    level_detail: str = ""
 
 
 class Job(_Base):

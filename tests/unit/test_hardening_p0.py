@@ -337,3 +337,31 @@ def test_the_shell_offers_three_ways_into_safe_mode():
     assert "GetAsyncKeyState" in source
     core = (REPO / "apps" / "desktop" / "src-tauri" / "src" / "core.rs").read_text(encoding="utf-8")
     assert '"PROSODY_SAFE_MODE"' in core, "the core is never told about Safe Mode"
+
+
+def test_a_configured_fl_that_is_not_a_program_cannot_render(tmp_path):
+    """The check runs on every platform, so this suite can see it.
+
+    Gated on Windows, it was invisible here: a fixture writing an empty file
+    named FL64.exe passed on Linux and failed the Windows release build.
+    """
+    from prosody_core.env import describe
+    from tests.fixtures.binaries import MACHINE_I386, fake_fl
+
+    empty = tmp_path / "FL64.exe"
+    empty.write_bytes(b"")
+    env = describe({"fl_executable": str(empty), "render_enabled": True})
+    assert env.fl_architecture_ok is False
+    assert env.can_render is False
+    assert "not a Windows program" in str(env.fl_architecture)
+    assert "not a Windows program" in env.fl_discovery
+
+    thirty_two_bit = fake_fl(tmp_path, name="FL.exe", machine=MACHINE_I386)
+    env = describe({"fl_executable": str(thirty_two_bit), "render_enabled": True})
+    assert env.fl_architecture_ok is False
+    assert "32-bit" in str(env.fl_architecture)
+
+    real = fake_fl(tmp_path, name="FL64-ok.exe")
+    env = describe({"fl_executable": str(real), "render_enabled": True})
+    assert env.fl_architecture_ok is True
+    assert env.can_render is True
