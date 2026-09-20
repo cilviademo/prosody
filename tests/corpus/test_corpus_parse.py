@@ -6,10 +6,10 @@ running them on the studio PC answers the parse-rate question directly.
 
 import pytest
 
-from flpfinisher.fs.safety import sha256_file
-from flpfinisher.parse.adapter import ParseError
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
-from flpfinisher.pipeline import scan_directory
+from prosody_core.fs.safety import sha256_file
+from prosody_core.parse.adapter import ParseError
+from prosody_core.parse.pyflp_backend import PyFLPBackend
+from prosody_core.pipeline import scan_directory
 
 pytestmark = pytest.mark.corpus
 

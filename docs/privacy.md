@@ -2,11 +2,11 @@
 
 ## What leaves this computer today
 
-**Nothing.** There is no network code in `flpfinisher/`. No HTTP client is
+**Nothing.** There is no network code in `prosody_core/`. No HTTP client is
 imported, no API key is read, no telemetry is collected. This is verifiable:
 
 ```bash
-grep -rE "requests|httpx|urllib|socket|anthropic|openai" flpfinisher/
+grep -rE "requests|httpx|urllib|socket|anthropic|openai" prosody_core/
 ```
 
 returns nothing.

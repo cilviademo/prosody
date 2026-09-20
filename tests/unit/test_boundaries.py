@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-PACKAGE = Path(__file__).resolve().parent.parent.parent / "flpfinisher"
+PACKAGE = Path(__file__).resolve().parent.parent.parent / "prosody_core"
 
 #: Modules that may import a parser library (ADR-0001). `write/` joins this list
 #: when it exists.
@@ -76,7 +76,7 @@ def test_the_package_never_calls_print(path: Path):
 
 def test_the_domain_model_depends_on_nothing_but_pydantic_and_the_stdlib():
     """ARCHITECTURE.md: no third-party object may appear in a field type."""
-    allowed = {"pydantic", "flpfinisher", "__future__", "typing", "enum",
+    allowed = {"pydantic", "prosody_core", "__future__", "typing", "enum",
                "datetime", "collections", "abc", "re", "functools", "pathlib"}
     for path in (PACKAGE / "model").rglob("*.py"):
         extra = imported_roots(path) - allowed
@@ -117,17 +117,30 @@ def test_the_desktop_app_never_says_asterism():
 
 
 def test_generated_names_carry_the_product_tag():
-    from flpfinisher.build import APP_TAG, output_stem
+    from prosody_core.build import APP_TAG, output_stem
 
     assert APP_TAG == "PROSODY"
     assert output_stem(Path("Starfall.flp"), "rnb", 1) == "Starfall__PROSODY_RNB_V001"
 
 
-def test_the_workspace_is_named_for_the_product():
-    from flpfinisher.workspace import APP_NAME, default_root
+def test_the_workspace_is_named_for_the_product(monkeypatch):
+    from prosody_core.workspace import (
+        APP_NAME,
+        DB_FILE,
+        default_root,
+        default_state,
+    )
+
+    # The autouse isolation fixture overrides both roots; unset to see defaults.
+    monkeypatch.delenv("PROSODY_HOME", raising=False)
+    monkeypatch.delenv("PROSODY_STATE", raising=False)
 
     assert APP_NAME == "Prosody"
+    assert DB_FILE == "prosody.db"
     assert default_root().name == "Prosody"
+    assert default_state().name == "Prosody"
+    # User output and machine-local state must not share a folder.
+    assert default_root() != default_state()
 
 
 def test_the_interface_is_literally_monochrome():

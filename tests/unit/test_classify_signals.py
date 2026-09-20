@@ -8,16 +8,16 @@ and one misleading signal cannot override several agreeing ones.
 
 import pytest
 
-from flpfinisher.classify.signals import (
+from prosody_core.classify.signals import (
     analyse_project,
     classify_project,
     measure,
     roles_present,
 )
-from flpfinisher.health.check import classify_state
-from flpfinisher.model.roles import Role
-from flpfinisher.model.schemas import ChannelKind, Note, ProjectState
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
+from prosody_core.health.check import classify_state
+from prosody_core.model.roles import Role
+from prosody_core.model.schemas import ChannelKind, Note, ProjectState
+from prosody_core.parse.pyflp_backend import PyFLPBackend
 from tests.fixtures.flp_builder import TYPE_NATIVE, ChannelSpec, NoteSpec, PatternSpec
 from tests.fixtures.projects import PPQ, full_kit
 
@@ -109,8 +109,8 @@ def test_an_unnamed_channel_is_not_confidently_classified(make_flp):
 
 
 def test_automation_channels_are_never_given_a_musical_role():
-    from flpfinisher.classify.signals import classify_channel
-    from flpfinisher.model.schemas import Channel
+    from prosody_core.classify.signals import classify_channel
+    from prosody_core.model.schemas import Channel
 
     channel = Channel(index=0, name="Volume", kind=ChannelKind.AUTOMATION)
     result = classify_channel(channel, [], ppq=PPQ, beats_per_bar=4)

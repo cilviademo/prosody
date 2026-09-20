@@ -18,7 +18,7 @@ whole product rests on.
 Add `tests/fixtures/flp_builder.py`, which emits **real FLP binaries**: the
 actual `FLhd`/`FLdt` container with real event records, parsed by PyFLP exactly
 as an FL-saved file is. It is a test fixture, not a project writer, and lives
-outside `flpfinisher/` so no application code can depend on it.
+outside `prosody_core/` so no application code can depend on it.
 
 The two tiers have different and non-overlapping jobs:
 

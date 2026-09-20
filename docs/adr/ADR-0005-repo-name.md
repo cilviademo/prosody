@@ -13,11 +13,11 @@ default `flp-finisher`. The git repository this work lands in is named
 
 - Git repository: `prosody` (unchanged — renaming is the founder's call).
 - Python distribution: `flp-finisher`.
-- Python package and import root: `flpfinisher`.
+- Python package and import root: `prosody_core`.
 - CLI entry point: `flpf`.
 
 The package name follows SPEC.md because every path in the spec, EXECUTE.md and
-CLAUDE.md assumes `flpfinisher/`.
+CLAUDE.md assumes `prosody_core/`.
 
 ## Consequences
 

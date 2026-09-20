@@ -146,6 +146,15 @@ export function ArrangeView({
                     why={canStem ? env?.stemStrategy ?? undefined : "unavailable"} />
           </div>
 
+          {canRender && (choices.wav || choices.mp3 || choices.stems) && (
+            <div style={{ marginTop: "var(--s5)" }}>
+              <Note heading="While rendering">
+                FL Studio opens its own window during a command-line render.
+                That is expected — leave it alone until the build finishes.
+              </Note>
+            </div>
+          )}
+
           {(!canRender || !canStem) && (
             <div className="stack-4" style={{ marginTop: "var(--s5)" }}>
               {!canRender && (

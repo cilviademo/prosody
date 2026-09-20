@@ -9,9 +9,9 @@ from fixtures.flp_builder import (
     one_pattern_loop,
 )
 
-from flpfinisher.health.check import check_project, classify_state
-from flpfinisher.model.schemas import HealthStatus, ProjectState
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
+from prosody_core.health.check import check_project, classify_state
+from prosody_core.model.schemas import HealthStatus, ProjectState
+from prosody_core.parse.pyflp_backend import PyFLPBackend
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ def test_state_classification(backend, make_flp, build, expected):
 
 def test_every_status_has_human_wording():
     """Raw enum names must never reach a primary surface."""
-    from flpfinisher.health.check import human_status
+    from prosody_core.health.check import human_status
 
     for status in HealthStatus:
         label = human_status(status)

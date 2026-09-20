@@ -22,8 +22,8 @@ Alternatives considered:
 
 ## Decision
 
-Use PyFLP, but never import it outside `flpfinisher/parse/` and (later)
-`flpfinisher/write/`. All access goes through the `ParserBackend` protocol in
+Use PyFLP, but never import it outside `prosody_core/parse/` and (later)
+`prosody_core/write/`. All access goes through the `ParserBackend` protocol in
 `parse/adapter.py`, which returns the application's own `BeatProject`.
 
 No PyFLP type appears in any field of any model.

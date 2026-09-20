@@ -30,6 +30,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_render)
 
 
+@pytest.fixture(autouse=True)
+def isolated_workspace(tmp_path_factory, monkeypatch):
+    """Point every workspace at a temporary directory.
+
+    Without this, any code path that opens a default Workspace writes into the
+    developer's real ``Documents/Prosody`` and ``%LOCALAPPDATA%/Prosody`` — and
+    shares one SQLite file across the whole suite, which makes tests pass or
+    fail depending on what ran before them.
+    """
+    home = tmp_path_factory.mktemp("prosody-home")
+    state = tmp_path_factory.mktemp("prosody-state")
+    monkeypatch.setenv("PROSODY_HOME", str(home))
+    monkeypatch.setenv("PROSODY_STATE", str(state))
+    return home, state
+
+
 @pytest.fixture
 def make_flp(tmp_path: Path):
     """Write a synthetic .flp into tmp_path and return its path."""

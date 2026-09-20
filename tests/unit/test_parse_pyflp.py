@@ -19,9 +19,9 @@ from fixtures.flp_builder import (
     one_pattern_loop,
 )
 
-from flpfinisher.model.schemas import ChannelKind, Severity
-from flpfinisher.parse.adapter import ParseError, ParserBackend
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
+from prosody_core.model.schemas import ChannelKind, Severity
+from prosody_core.parse.adapter import ParseError, ParserBackend
+from prosody_core.parse.pyflp_backend import PyFLPBackend
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def test_header_fields(backend, make_flp):
 
 
 def test_id_is_the_sha256_of_the_source(backend, make_flp):
-    from flpfinisher.fs.safety import sha256_file
+    from prosody_core.fs.safety import sha256_file
 
     path = make_flp(one_pattern_loop())
     assert backend.parse(path).id == sha256_file(path)
@@ -141,7 +141,7 @@ def test_missing_sample_fixture(backend, make_flp):
 
 
 def test_source_file_is_not_modified(backend, make_flp):
-    from flpfinisher.fs.safety import sha256_file
+    from prosody_core.fs.safety import sha256_file
 
     path = make_flp(multi_pattern_loop())
     before = sha256_file(path)

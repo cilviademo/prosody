@@ -1,0 +1,13 @@
+This folder is replaced by the PyInstaller build of the Prosody core.
+
+It is committed with only this file so that `cargo build` and `tauri build`
+can resolve `bundle.resources` in a fresh checkout. A development build does
+not use it at all — the shell runs the core straight from the repository, so
+edits to Python take effect on the next call rather than the next build.
+
+Populated by:
+  scripts/build-release.ps1        (local Windows build)
+  .github/workflows/release.yml    (CI)
+
+Both run `python -m PyInstaller prosody-core.spec` and copy
+`dist/prosody-core/` here before `tauri build`.

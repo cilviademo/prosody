@@ -63,7 +63,7 @@ flp-finisher/
   SPEC.md                   this file
   PHASE_REPORT.md           written by the agent at each phase exit
   docs/adr/                 ADR-0001… one per irreversible choice
-  flpfinisher/
+  prosody_core/
     cli.py                  Typer app: scan, inspect, extract, classify, arrange, preview, build, find, doctor
     model/schemas.py        pydantic: BeatProject, Analysis, ArrangementPlan, GenreProfile, HealthReport
     parse/adapter.py        Backend protocol; pyflp_backend.py; (flpdiff_backend.py later)
@@ -378,7 +378,7 @@ scaffold. Do not build features beyond what the spikes need.
 ## Tasks, in order
 
 ### T0 Scaffold
-- python 3.12, uv or pip, pyproject.toml, package `flpfinisher`, Typer CLI `flpf`
+- python 3.12, uv or pip, pyproject.toml, package `prosody_core`, Typer CLI `flpf`
 - deps: pyflp, mido, numpy, soundfile, pydantic>=2, typer, rich, sqlite (stdlib)
 - tests/ with pytest; tiers: unit (always), corpus (needs corpus/), render (FLPF_RENDER=1)
 - `flpf doctor`: locate FL64.exe (registry + default paths), print PyFLP version,
@@ -460,7 +460,7 @@ SPEC.md sections 2 (principles), 7 (schemas), and the current EXECUTE.md.
 - outputs only under out/<slug>/
 - FL Studio renders; code never synthesizes audio
 - LLM plans and labels; deterministic code executes; permissions enforced in
-  flpfinisher/arrange/permissions.py, not in prompts
+  prosody_core/arrange/permissions.py, not in prompts
 - every LLM call logged to DATA/llm_log.jsonl (model, prompt, response, cost)
 - no UI code before Phase 8
 
@@ -470,11 +470,11 @@ FLPF_GUI=1     enables pywinauto stem export (interactive session only)
 FLPF_LLM=off   disables LLM fallbacks (default in tests)
 
 ## Conventions
-- Python 3.12, pydantic v2 models in flpfinisher/model/schemas.py are the only
+- Python 3.12, pydantic v2 models in prosody_core/model/schemas.py are the only
   data contract; changing one requires docs/adr/ADR-NNNN
 - Typer commands are thin: parse args → call one function in the stage module
 - Stage functions are pure: (paths/models in) → (paths/models out); no globals
-- Backend protocol in flpfinisher/parse/adapter.py; never import pyflp outside
+- Backend protocol in prosody_core/parse/adapter.py; never import pyflp outside
   parse/ and write/
 - Ticks everywhere internally; bars only at the CLI and plan boundary
 - Role vocabulary is closed: chords, melody, counter, bass, kick, snare, hats,

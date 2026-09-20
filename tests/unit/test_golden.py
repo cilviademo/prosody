@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from fixtures.flp_builder import FIXTURES, write_flp
 
-from flpfinisher.pipeline import inspect_project
+from prosody_core.pipeline import inspect_project
 
 GOLDEN_DIR = Path(__file__).resolve().parent.parent / "golden"
 

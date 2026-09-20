@@ -31,7 +31,7 @@ scaffold. Do not build features beyond what the spikes need.
 ## Tasks, in order
 
 ### T0 Scaffold
-- python 3.12, uv or pip, pyproject.toml, package `flpfinisher`, Typer CLI `flpf`
+- python 3.12, uv or pip, pyproject.toml, package `prosody_core`, Typer CLI `flpf`
 - deps: pyflp, mido, numpy, soundfile, pydantic>=2, typer, rich, sqlite (stdlib)
 - tests/ with pytest; tiers: unit (always), corpus (needs corpus/), render (FLPF_RENDER=1)
 - `flpf doctor`: locate FL64.exe (registry + default paths), print PyFLP version,

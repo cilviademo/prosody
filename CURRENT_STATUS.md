@@ -2,130 +2,142 @@
 
 Prosody v0.1.0 · 2026-09-20
 
-Verified on Linux with a synthetic four-bar project. **No real FL Studio
-project and no FL Studio installation has been exercised yet** — the studio PC
-is where that happens.
+**This session ran on Linux in a container.** Windows binaries need Windows, so
+per RELEASE.md section 0 all code and configuration work happened here and the
+`windows-latest` GitHub Actions job produces the ZIP and installer. **The
+clean-machine acceptance test (RELEASE.md section 10) was not run** — it needs
+a Windows account and FL Studio. Nothing below claims otherwise.
 
 ---
 
 ## WORKING
 
-- **The whole loop, end to end, in the app:** drop or browse an `.flp` →
-  analysis → choose Extract / Arrange / Extract + Arrange → genre → structure →
-  creativity → timeline preview → Build → results with Open in FL Studio and
-  Open output folder. Driven through the running UI, not just the API.
-- **Native derivative `.flp` generation (Tier A).** A four-bar loop becomes an
-  80-bar hip-hop or 88-bar R&B arrangement. Patterns, channels, notes, plugins,
-  mixer and routing are copied **byte for byte**; only the playlist event is
-  replaced and section markers are added.
-- **The original is never modified.** Hashed before the build, re-verified
-  after, reported in the result and in `reports/validation.json`.
-- **Preserve Composition enforced in code**, at two independent gates: an
-  `ArrangementPlan` model validator (an over-privileged plan cannot be
-  constructed) and a runtime check immediately before bytes are written.
-- **Six genre profiles as data** — hip-hop, R&B, pop, trap, EDM, drum & bass —
-  with section grammar, energy targets, role weights, entry rules and dropouts.
-- **Energy engine.** Density per section drives which existing roles play.
-  Entry rules work: bass enters with the first hook in hip-hop; the kick drops
-  out of an EDM breakdown.
-- **Multi-signal role classification.** Channel name, sample filename, plugin,
-  mixer track name, pitch range, polyphony, note duration, note density and
-  on-beat ratio vote; confidence is margin-based and capped at 0.97.
-- **Per-role MIDI export** at the project's PPQ and tempo, note count matching
-  the source exactly.
-- **Portable ZIP** with resolvable samples and a `MISSING_SAMPLES.txt` for the
-  rest.
-- **Arrangement timeline preview** — section blocks shaded by energy, one lane
-  per role, before anything is written.
-- **Library** (SQLite, migrations from v1) and **Settings** (FL path with Test
-  Connection, render toggle, export folder, formats, creativity, planner).
-- **Honest degradation everywhere.** Unavailable capabilities are disabled with
-  the reason shown, and every other output still runs.
-- **Monochrome UI system.** Tokens, primitives and per-screen styles in
-  `apps/desktop/src/styles` + `components/ui.tsx`; no accent hue anywhere.
-  Documented in [docs/design-system.md](docs/design-system.md).
-- **Settings actually take effect.** The FL Studio path and the Rendering
-  toggle are read by the environment resolver, not just saved. (They were
-  inert before the redesign pass; `FLPF_*` env flags still work for the CLI.)
-- **475 unit tests, lint clean.** They parse real FLP binaries, not mocks.
+Verified by running it here, on Linux, against synthetic projects.
+
+- **The whole loop in the app:** drop or browse an `.flp` → analysis → Extract
+  / Arrange / Extract + Arrange → genre → structure → creativity → timeline →
+  Build → results. Re-verified end to end after the core was rearchitected.
+- **Native derivative `.flp` (Tier A).** A four-bar loop becomes an 80-bar
+  hip-hop or 88-bar R&B project. Patterns, channels, notes, plugins, mixer and
+  routing are copied byte for byte; only the playlist event is replaced.
+- **The original is never modified.** Hashed before, re-verified after.
+- **Long-lived core over stdio JSON lines.** One process for the session with
+  request ids and streamed progress — not one process per call. 21 protocol
+  tests, including that the loop survives malformed input, unknown methods and
+  handler failures.
+- **The frozen core works.** `python -m PyInstaller prosody-core.spec` builds a
+  33 MB onedir bundle that answers `ping` and runs a complete build — genre
+  profiles and the connection-test asset included. Verified on Linux.
+- **Two roots, as specified.** `Documents/Prosody/{Exports,Projects}` for user
+  output; `%LOCALAPPDATA%/Prosody/{prosody.db,settings.json,Cache,Logs}` for
+  state. Portable mode collapses both into `Data/` beside the executable.
+- **Diagnostics screen** instead of a blank window when the core fails to
+  start, with the log path and a Try again button that respawns it.
+- **Offline, proven at runtime.** A full build runs with every socket entry
+  point replaced by a landmine; the AST walk separately proves nothing
+  network-capable is even imported.
+- **Test Connection renders** the bundled one-bar project rather than just
+  checking a path exists.
+- **Settings take effect** — FL path and Rendering toggle are read by the
+  environment resolver.
+- **524 unit tests, ruff clean, tsc clean, zero Rust warnings.**
 
 ## PARTIAL
 
-- **Visual polish on secondary surfaces.** The six main screens were reviewed
-  and revised; the empty Library state, the fatal-startup screen and the
-  progress screen have had less time in front of a real eye — the progress
-  screen in particular finishes in under a second locally, so it has only been
-  reviewed as a component.
-- **Responsive behaviour** is checked at the 1180×820 default and down to the
-  940px minimum width. Nothing below that is designed for.
-
-- **Key detection** — pitch-class histogram correlation. Labelled "approx" in
-  the UI below 0.70 confidence. Untested against real music.
-- **Creativity levels 1 and 2** — selectable, and the UI says plainly they are
-  not implemented. The engine only ever repositions existing patterns.
-- **AI planners** — `ArrangementPlanner` interface with Claude and OpenAI
-  implementations that declare themselves unavailable and fall back to the
-  deterministic planner. No network code exists. Rules-only is fully working.
-- **Arrangement Pack (Tier B)** — the fallback triggers correctly and is
-  described as a supported result, but has only been exercised by forcing it
-  (a project with no notes), never by a real project that defeats the writer.
-- **Patterns that mix roles** move as one block at Level 0. Reported in the
-  plan notes rather than worked around; splitting them is a note edit.
+- **The Windows build is configured but unproven.** The PyInstaller spec, the
+  NSIS config, `build-release.ps1`, `make-portable.ps1` and the CI workflow are
+  all written; the spec is proven on Linux. The Windows path has never
+  executed. **Expect the first tag build to need one fix** — a missing DLL or a
+  resource path is the usual shape.
+- **WebView2 detection** reads the Edge Update registry keys under HKLM and
+  HKCU. The logic compiles and is Windows-only, so it has not been exercised.
+- **Window geometry** is saved on resize; it is not yet restored on launch or
+  clamped to the current monitor.
+- **Arrangement Pack (Tier B)** triggers correctly but has only been exercised
+  by forcing it, never by a real project that defeats the writer.
 
 ## NOT YET WORKING
 
-- **Audio rendering (WAV/MP3).** The FL command-line wrapper is written,
-  captures command/exit/stdout/stderr/timing, and is gated behind FL discovery
-  plus `render_enabled`. **It has never been run against FL Studio.**
-- **Stems.** `solo-copy` writes correct per-role derivative projects (verified:
-  only the chosen channels are enabled, all content preserved) but the render
-  half is unexercised. `gui-export` is deliberately unimplemented — its click
-  path must be verified against a real FL install before it is written.
-- **The FL MIDI-export switch letter** is unconfirmed. `flpf doctor` prints
-  `UNCONFIRMED`, and a render-tier test fails under `FLPF_RENDER=1` until
-  someone records it. Per-role MIDI does not need it.
-- **Windows installer.** Not produced here — Tauri cannot cross-compile a
-  Windows bundle from Linux. Build it on the studio PC (README has the command).
+- **Audio rendering and stems have never been run against FL Studio.** The
+  wrapper captures command, exit code, stdout, stderr and timing, and is gated
+  behind detection plus the Rendering toggle.
+- **The FL MIDI-export switch letter** is unconfirmed; `FL_SWITCHES` records it
+  as `None` and a render-tier test fails under `FLPF_RENDER=1` until someone
+  records it. Per-role MIDI does not need it.
+- **Creativity levels 1 and 2.** Selectable, and the UI says they are not
+  implemented.
+- **LLM planners.** The interface exists; the providers declare themselves
+  unavailable and fall back to the deterministic planner.
+- **ffmpeg is not bundled.** Nothing calls it — FL renders MP3 natively. The
+  lookup (`resources/bin/ffmpeg.exe`, then PATH) is implemented and documented
+  so adding it later is a build-script change, not a code change.
 - **Sample relinking.** Missing samples are detected and reported, never
   repaired.
-- **Level 1 / 2 operations**, audio preview waveform, batch/queue processing.
 
 ## KNOWN ISSUES
 
-1. **PyFLP 2.2.1 cannot parse anything on Python 3.11+** without the shim this
-   project ships (`parse/_pyflp_compat.py`). Six tests pin it;
-   `flpf doctor` and Settings → Environment report when it is active.
-2. **An arrangement not terminated by `ArrangementsID.Current` is silently
-   dropped by PyFLP** — no error, zero arrangements. Whether FL writes such a
-   file is unknown. This is the most dangerous unknown because it fails quietly.
-3. **FL 21 playlist items (60-byte) are untested.** The writer matches whatever
-   the source uses and copies an existing item's trailing bytes; with no item
-   to copy it zero-fills and warns. Only 32-byte items have been verified.
-4. **Pattern length is inferred from note extents** when FL wrote no Length
-   event, then rounded up to whole bars for tiling. Correct for the fixtures;
-   unverified against projects with deliberate odd-length patterns.
-5. **`state` thresholds** (≤8 bars = loop, <32 = partial) are guesses.
-6. **Nothing has been tested above six small files.** The scan loop is
-   synchronous; the resumable queue is designed, not built.
-7. **Section labels clip on very short sections.** A 4-bar `OUTRO` in an
-   80-bar song renders as `OUTR`; the full name is in the tooltip. Clipping
-   beats an ellipsis that would eat most of the word, but neither is ideal.
-8. **The app needs Python 3.10+ on the machine.** It is not yet bundled as a
-   standalone runtime; the window shows a clear message with the fix if Python
-   is missing.
+1. **No real FL Studio project has ever been parsed.** Every fixture is
+   synthetic. The ≥80% parse rate in SPEC.md is unmeasured.
+2. **PyFLP is GPL-3.0 and is bundled inside the core executable.** That carries
+   obligations for public distribution which have **not** been resolved. Fine
+   for private or internal builds; a decision is needed before a public
+   release. See `licenses/THIRD-PARTY.md`.
+3. **The builds are unsigned**, so SmartScreen shows "Windows protected your
+   PC" on first launch. Documented in README.txt and RELEASE_NOTES.md.
+4. **PyFLP 2.2.1 cannot parse anything on Python 3.11+** without the shim this
+   project ships (`parse/_pyflp_compat.py`).
+5. **An arrangement not terminated by `ArrangementsID.Current` is silently
+   dropped by PyFLP** — no error, zero arrangements. The most dangerous unknown
+   in the parser because it fails quietly.
+6. **FL 21 playlist items (60-byte) are untested.** The writer matches the
+   source\'s item size and copies an existing item\'s trailing bytes; with none
+   to copy it zero-fills and warns.
+7. **Section labels clip** on very short sections (`OUTRO` → `OUTR` at 4 bars).
+
+## CLEAN-MACHINE ACCEPTANCE TEST (RELEASE.md section 10)
+
+**NOT RUN.** It requires a second Windows user account, the built ZIP and FL
+Studio. Every step below is therefore NOT YET VERIFIED — none may be recorded
+as WORKING until it has actually been executed on the studio PC.
+
+| # | Step | Result |
+| --- | --- | --- |
+| 1-3 | Extract the ZIP, double-click `Prosody.exe`, native window, no console | NOT RUN |
+| 4 | FL detection matches reality; Test Connection passes | NOT RUN |
+| 5 | Drop a real 4-bar `.flp`; BPM/patterns/channels/plugins match FL | NOT RUN |
+| 6 | R&B → Preserve Composition → timeline → Build | NOT RUN |
+| 7 | Outputs land in `Documents\Prosody\Exports\<name>__PROSODY_RNB_V001\` | NOT RUN |
+| 8 | Source `.flp` hash unchanged (`Get-FileHash` before/after) | NOT RUN |
+| 9 | Open Output Folder and Open in FL Studio both work | NOT RUN |
+| 10 | Relaunch; settings, FL path and Library persist | NOT RUN |
+| 11 | `portable.flag` uses `Data\` and leaves `%LOCALAPPDATA%` untouched | NOT RUN |
+| 12 | Network adapter disabled; repeat 5-7 with Rules Only | NOT RUN |
+| 13 | Installer: Start Menu entry, launch, clean uninstall | NOT RUN |
+
+The equivalents that *were* run here, on Linux: the frozen core answers ping
+and completes a full build (steps 5-7 in substance, not on Windows); the
+source hash check is asserted by the test suite (step 8); a full build runs
+with sockets disabled (step 12); portable and split-root layouts are asserted
+by tests (step 11). None of that substitutes for the real thing.
 
 ## NEXT PRIORITY
 
-**Run it on the studio PC against real projects.** In order:
+**Push a tag, download the ZIP, and run section 10 on the studio PC.**
 
-1. Point Prosody at a real four-bar `.flp` and confirm the derivative opens in
-   FL Studio with its plugins, samples and mixer intact. This is the one
-   result that decides whether the product works.
-2. Set the FL Studio path, enable rendering, and run a build — confirming the
-   `/R /E` switches, the wall time, and **whether FL leaves a process running
-   afterwards** (this decides whether batch rendering is possible at all).
-3. Record the MIDI-export switch letter from the local FL manual.
-4. Then stems: `solo-copy` end to end, with a null test against the full mix.
+```
+git tag v0.1.0 && git push origin v0.1.0
+```
 
-Everything after that is scale and polish. These four answers are what turn
-"verified on synthetic fixtures" into "verified".
+Then, in order:
+
+1. If the CI build fails, it will be the PyInstaller spec or a resource path —
+   fix and re-tag.
+2. Run the clean-account test. Record each step in this file with its real
+   result.
+3. Configure FL Studio and press **Test Connection**. That single result
+   unblocks WAV, MP3 and stems, and answers whether FL leaves a process running
+   after a command-line render — which decides whether batch rendering is
+   possible at all.
+4. Open a generated derivative in FL Studio and confirm its plugins, samples
+   and mixer survived. That is the result that decides whether the product
+   works.

@@ -13,7 +13,7 @@ SPEC.md sections 2 (principles), 7 (schemas), and the current EXECUTE.md.
 - outputs only under out/<slug>/
 - FL Studio renders; code never synthesizes audio
 - LLM plans and labels; deterministic code executes; permissions enforced in
-  flpfinisher/arrange/permissions.py, not in prompts
+  prosody_core/arrange/permissions.py, not in prompts
 - every LLM call logged to DATA/llm_log.jsonl (model, prompt, response, cost)
 - no UI code before Phase 8
 
@@ -23,11 +23,11 @@ FLPF_GUI=1     enables pywinauto stem export (interactive session only)
 FLPF_LLM=off   disables LLM fallbacks (default in tests)
 
 ## Conventions
-- Python 3.12, pydantic v2 models in flpfinisher/model/schemas.py are the only
+- Python 3.12, pydantic v2 models in prosody_core/model/schemas.py are the only
   data contract; changing one requires docs/adr/ADR-NNNN
 - Typer commands are thin: parse args → call one function in the stage module
 - Stage functions are pure: (paths/models in) → (paths/models out); no globals
-- Backend protocol in flpfinisher/parse/adapter.py; never import pyflp outside
+- Backend protocol in prosody_core/parse/adapter.py; never import pyflp outside
   parse/ and write/
 - Ticks everywhere internally; bars only at the CLI and plan boundary
 - Role vocabulary is closed: chords, melody, counter, bass, kick, snare, hats,

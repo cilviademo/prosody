@@ -3,10 +3,10 @@
 import pytest
 from fixtures.flp_builder import ChannelSpec, one_pattern_loop
 
-from flpfinisher.classify.rules import analyse, hint_roles, role_from_name
-from flpfinisher.model.roles import Role
-from flpfinisher.model.schemas import CONFIDENCE_THRESHOLD, ClassificationMethod, ProjectState
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
+from prosody_core.classify.rules import analyse, hint_roles, role_from_name
+from prosody_core.model.roles import Role
+from prosody_core.model.schemas import CONFIDENCE_THRESHOLD, ClassificationMethod, ProjectState
+from prosody_core.parse.pyflp_backend import PyFLPBackend
 
 
 @pytest.mark.parametrize(

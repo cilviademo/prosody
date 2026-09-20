@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "flp-finisher"
+name = "prosody-core"
 version = "0.1.0"
-description = "Local-first CLI that inspects, analyses and (later) arranges FL Studio projects."
+description = "Prosody core: parses FL Studio projects, plans arrangements and writes derivative .flp files."
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
 
@@ -29,10 +29,11 @@ dev = [
 ]
 
 [project.scripts]
-flpf = "flpfinisher.cli:main"
+prosody-core = "prosody_core.server:main"
+flpf = "prosody_core.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["flpfinisher"]
+packages = ["prosody_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

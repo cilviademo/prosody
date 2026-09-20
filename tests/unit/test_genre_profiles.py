@@ -2,9 +2,9 @@
 
 import pytest
 
-from flpfinisher.arrange import profiles
-from flpfinisher.model.roles import Role
-from flpfinisher.model.schemas import GenreProfile, SectionType
+from prosody_core.arrange import profiles
+from prosody_core.model.roles import Role
+from prosody_core.model.schemas import GenreProfile, SectionType
 
 
 def test_v1_ships_six_genres():

@@ -1,6 +1,6 @@
 import pytest
 
-from flpfinisher.model.roles import DRUM_ROLES, PITCHED_ROLES, Role, normalise_role
+from prosody_core.model.roles import DRUM_ROLES, PITCHED_ROLES, Role, normalise_role
 
 
 def test_vocabulary_is_closed():

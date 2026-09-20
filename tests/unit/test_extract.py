@@ -4,19 +4,19 @@ import zipfile
 
 import pytest
 
-from flpfinisher.classify.signals import analyse_project
-from flpfinisher.env import Environment
-from flpfinisher.extract import render_fl
-from flpfinisher.extract.midi import write_role_midi
-from flpfinisher.extract.package import package_project
-from flpfinisher.extract.stems import (
+from prosody_core.classify.signals import analyse_project
+from prosody_core.env import Environment
+from prosody_core.extract import render_fl
+from prosody_core.extract.midi import write_role_midi
+from prosody_core.extract.package import package_project
+from prosody_core.extract.stems import (
     GuiExportStrategy,
     SoloCopyStrategy,
     available_strategy,
     solo_copy,
 )
-from flpfinisher.health.check import classify_state
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
+from prosody_core.health.check import classify_state
+from prosody_core.parse.pyflp_backend import PyFLPBackend
 from tests.fixtures.projects import full_kit
 
 
@@ -166,7 +166,7 @@ def test_solo_copy_preserves_all_musical_content(kit, backend, tmp_path):
 
 
 def test_solo_copy_never_touches_the_source(kit, tmp_path):
-    from flpfinisher.fs.safety import sha256_file
+    from prosody_core.fs.safety import sha256_file
 
     source, _, _ = kit
     before = sha256_file(source)
@@ -222,7 +222,7 @@ def test_render_is_unavailable_when_rendering_is_turned_off(tmp_path):
 def test_discovery_reasons_are_phrases_not_sentences():
     """``availability`` composes "FL Studio not found — {reason}", so a reason
     that itself says "not found" produces "not found: not found" on screen."""
-    from flpfinisher.env import find_fl_executable
+    from prosody_core.env import find_fl_executable
 
     _, reason = find_fl_executable()
     assert "not found" not in reason.lower()
@@ -253,3 +253,68 @@ def test_expected_duration_maths():
 def test_render_result_log_is_serialisable():
     result = render_fl.RenderResult(ok=False, message="x")
     assert set(result.as_log()) >= {"command", "exit_code", "seconds", "outputs"}
+
+
+# -- Test Connection --------------------------------------------------------- #
+
+def test_the_bundled_connection_test_project_ships_and_parses():
+    """Settings -> Test Connection renders this; it must be in the package."""
+    from prosody_core.extract.render_fl import connection_test_project
+    from prosody_core.parse.pyflp_backend import PyFLPBackend
+
+    project = connection_test_project()
+    assert project is not None and project.is_file()
+    parsed = PyFLPBackend().parse(project)
+    assert parsed.tempo == 120.0
+    assert parsed.note_count > 0
+
+
+def test_the_connection_test_asset_is_small():
+    """It is shipped in every release; it should stay a probe, not a project."""
+    from prosody_core.extract.render_fl import connection_test_project
+
+    assert connection_test_project().stat().st_size < 16 * 1024
+
+
+def test_test_connection_reports_a_missing_fl_studio():
+    result = render_fl.test_connection(offline_env())
+    assert not result.ok
+    assert "not found" in result.detail
+
+
+def test_test_connection_does_not_require_rendering_to_be_enabled(tmp_path):
+    """The button must work before the user flips the Rendering switch."""
+    fake = tmp_path / "FL64.exe"
+    fake.write_text("")
+    result = render_fl.test_connection(
+        offline_env(fl_executable=fake, render_enabled=False), timeout=1
+    )
+    # It gets past the availability gate and actually tries; failure is about
+    # the fake executable, not about the flag being off.
+    assert not result.ok
+    assert "turned off" not in result.detail
+
+
+def test_an_unlaunchable_fl_path_fails_cleanly(tmp_path):
+    """A path that exists but cannot be executed must not raise."""
+    fake = tmp_path / "FL64.exe"
+    fake.write_text("not a program")
+    result = render_fl.render_project(
+        tmp_path / "x.flp", tmp_path / "out",
+        env=offline_env(fl_executable=fake, render_enabled=True), timeout=5,
+    )
+    assert result.ok is False
+    assert "could not start FL Studio" in result.message
+
+
+def test_test_connection_never_touches_the_bundled_asset(tmp_path):
+    from prosody_core.extract.render_fl import connection_test_project
+    from prosody_core.fs.safety import sha256_file
+
+    asset = connection_test_project()
+    before = sha256_file(asset)
+    fake = tmp_path / "FL64.exe"
+    fake.write_text("")
+    render_fl.test_connection(offline_env(fl_executable=fake, render_enabled=True),
+                              timeout=1)
+    assert sha256_file(asset) == before

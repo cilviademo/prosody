@@ -1,0 +1,13 @@
+Prosody
+Copyright (c) 2026
+
+This build bundles third-party components. Their licences are reproduced in
+this folder:
+
+  PyFLP            GPL-3.0-or-later   THIRD-PARTY.md
+  Tauri / WRY      MIT or Apache-2.0  THIRD-PARTY.md
+  mido             MIT                THIRD-PARTY.md
+  pydantic         MIT                THIRD-PARTY.md
+  Python runtime   PSF-2.0            THIRD-PARTY.md
+
+See THIRD-PARTY.md for the full notices and source links.

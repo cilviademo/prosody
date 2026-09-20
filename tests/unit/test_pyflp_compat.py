@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from flpfinisher.parse import _pyflp_compat
+from prosody_core.parse import _pyflp_compat
 
 
 @pytest.fixture(autouse=True)

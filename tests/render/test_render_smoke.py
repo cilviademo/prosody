@@ -6,7 +6,7 @@ wired up and its gating is proven, rather than being invented later.
 
 import pytest
 
-from flpfinisher import env as environment
+from prosody_core import env as environment
 
 pytestmark = pytest.mark.render
 

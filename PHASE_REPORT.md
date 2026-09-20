@@ -227,7 +227,7 @@ Reversible defaults have been taken in every case; work continued.
 
 | # | Decision | Default taken | Reversal cost |
 | --- | --- | --- | --- |
-| 1 | Product/repo name. Repo is `prosody`; spec says `flp-finisher` | Repo unchanged; package `flpfinisher`, CLI `flpf` ([ADR-0005](docs/adr/ADR-0005-repo-name.md)) | One commit |
+| 1 | Product/repo name. Repo is `prosody`; spec says `flp-finisher` | Repo unchanged; package `prosody_core`, CLI `flpf` ([ADR-0005](docs/adr/ADR-0005-repo-name.md)) | One commit |
 | 2 | **Corpus location and the 25 files** | None chosen — `corpus/README.md` documents the required composition and the junction/symlink command | **Blocking: nothing about real projects can be measured until this is done** |
 | 3 | Studio PC OS and FL version | Recorded by `doctor` when run there | None |
 | 4 | Where `out/` lives | `./out`, overridable with `--out`; spec suggests `D:/FLPF/out` | Flag |

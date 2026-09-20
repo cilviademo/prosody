@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from flpfinisher.model.roles import Role
-from flpfinisher.model.schemas import (
+from prosody_core.model.roles import Role
+from prosody_core.model.schemas import (
     CONFIDENCE_THRESHOLD,
     ArrangementPlan,
     BeatProject,

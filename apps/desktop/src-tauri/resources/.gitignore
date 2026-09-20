@@ -1,0 +1,4 @@
+# The built core is a release artefact, not source.
+prosody-core/*
+!prosody-core/PLACEHOLDER.txt
+bin/

@@ -1,0 +1,8 @@
+# Runtime dependencies of the Prosody core, pinned for reproducible releases.
+# The desktop app ships these inside the PyInstaller bundle; nothing is
+# installed on the user's machine.
+pyflp==2.2.1
+pydantic==2.13.5
+mido==1.3.3
+typer==0.27.2
+rich==15.0.0

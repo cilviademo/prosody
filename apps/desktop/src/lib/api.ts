@@ -3,7 +3,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
-  BuildOutcome, Env, Genre, LibraryItem, Plan, ProgressEvent, Project, Settings,
+  BackendStatus, BuildOutcome, Env, Genre, LibraryItem, Plan, ProgressEvent,
+  Project, Settings,
 } from "./types";
 
 export class BackendError extends Error {
@@ -15,7 +16,13 @@ export class BackendError extends Error {
   }
 }
 
-interface Envelope<T> { ok: boolean; data?: T; error?: string; detail?: string }
+interface Envelope<T> {
+  id?: number;
+  ok: boolean;
+  data?: T;
+  error?: string;
+  detail?: string;
+}
 
 async function call<T>(method: string, payload: Record<string, unknown> = {}): Promise<T> {
   let envelope: Envelope<T>;
@@ -50,7 +57,10 @@ export const api = {
   library: () => call<{ projects: LibraryItem[] }>("library.list").then((r) => r.projects),
   forget: (id: string) => call<{ removed: string }>("library.forget", { id }),
   testFl: (path?: string) =>
-    call<{ ok: boolean; path: string | null; detail: string }>("fl.test", { path }),
+    call<{
+      ok: boolean; path: string | null; detail: string;
+      seconds?: number; rendered?: boolean;
+    }>("fl.test", { path }),
 };
 
 /** Subscribe to build progress. Returns an unsubscribe function. */
@@ -59,10 +69,35 @@ export function onProgress(handler: (event: ProgressEvent) => void) {
   return () => { void promise.then((un) => un()); };
 }
 
-export async function backendStatus() {
-  return invoke<{ ok: boolean; python?: string; root?: string; error?: string }>(
-    "backend_status",
-  );
+export async function backendStatus(): Promise<BackendStatus> {
+  const raw = await invoke<Record<string, unknown>>("backend_status");
+  return {
+    ok: Boolean(raw.ok),
+    portable: Boolean(raw.portable),
+    documents: String(raw.documents ?? ""),
+    state: String(raw.state ?? ""),
+    logs: String(raw.logs ?? ""),
+    coreVersion: raw.core_version as string | undefined,
+    coreExecutable: raw.core_executable as string | undefined,
+    error: raw.error as string | undefined,
+  };
+}
+
+/** Try to start the core again without restarting the app. */
+export async function restartCore(): Promise<BackendStatus> {
+  await invoke("restart_core");
+  return backendStatus();
+}
+
+/** Remember window geometry between sessions. */
+export async function saveWindow(
+  bounds: { width: number; height: number; x: number; y: number },
+) {
+  try {
+    await invoke("save_window", bounds);
+  } catch {
+    // Geometry is a convenience; never let it break a session.
+  }
 }
 
 export const shell = {

@@ -41,10 +41,47 @@ before it writes a byte.
 
 ## Install
 
-**Requirements:** Windows 10/11, and Python 3.10 or newer on `PATH`.
-FL Studio is optional — it is only needed for audio and stems.
+**Nothing is required but Windows 10 or 11.** Prosody ships its own core;
+Python, Node and Rust are not needed to run it. FL Studio is optional — only
+audio and stems need it.
 
-### Run from source
+### Download a release
+
+Grab `Prosody-v0.1.0-Windows.zip` (portable) or `Prosody-v0.1.0-Setup.exe`
+(installer) from the repository's **Releases** page, in a browser. No account,
+no `git`, no terminal.
+
+Extract the ZIP anywhere you can write to and double-click `Prosody.exe`. Keep
+the folder together — the executable needs `resources/` beside it.
+
+On first launch Windows SmartScreen says **"Windows protected your PC"**
+because the builds are unsigned. Click **More info** → **Run anyway**.
+
+Put an empty file named `portable.flag` next to `Prosody.exe` to keep
+everything in a `Data` folder beside the executable instead of your user
+profile.
+
+### Build a release yourself
+
+Releases are produced by CI so they do not depend on one machine. Push a tag:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The `windows-latest` job in `.github/workflows/release.yml` builds the core,
+the app and the installer, smoke-tests the extracted ZIP, and attaches
+everything to the GitHub Release.
+
+To build on a Windows machine instead:
+
+```powershell
+.\scripts\build-release.ps1
+```
+
+It prints the exact path of `Prosody.exe`, the ZIP and the installer.
+
+### Run from source (development)
 
 One command, from the repository root:
 
@@ -69,31 +106,10 @@ npm run app          # launches Prosody (tauri dev)
 On Linux or macOS, `./scripts/setup.sh` does the same. FL Studio is
 Windows-only, so rendering and stems stay unavailable there.
 
-### Build a Windows installer
-
-Run this **on the Windows machine** — Tauri cannot cross-compile a Windows
-bundle from Linux or macOS.
-
-```powershell
-.\scripts\setup-windows.ps1 -Bundle
-```
-
-or, by hand:
-
-```powershell
-cd apps\desktop
-npm run bundle
-```
-
-The installer lands in:
-
-```
-apps\desktop\src-tauri\target\release\bundle\nsis\Prosody_0.1.0_x64-setup.exe
-apps\desktop\src-tauri\target\release\bundle\msi\Prosody_0.1.0_x64_en-US.msi
-```
-
-If Prosody cannot find Python it says so on startup. Set `PROSODY_PYTHON` to
-an interpreter path to override the search.
+A development build runs the core straight from the checkout, so Python edits
+take effect on the next call. If Python cannot be found, Prosody shows a
+Diagnostics screen; set `PROSODY_PYTHON` to an interpreter path to override
+the search.
 
 ---
 
@@ -114,9 +130,11 @@ works without FL Studio at all.
 
 Prosody writes only inside its own workspace, never beside your sources:
 
+Your output, in Documents:
+
 ```
 Documents/Prosody/
-  Projects/  Cache/  Logs/  Database/
+  Projects/
   Exports/
     Starfall__PROSODY_RNB_V001/
       Starfall__PROSODY_RNB_V001.flp   the arranged project
@@ -127,6 +145,16 @@ Documents/Prosody/
       data/      project.json  analysis.json  arrangement.json
       reports/   health.json  validation.json  operations.log
 ```
+
+Machine-local state, kept out of Documents so a cloud-synced folder does not
+end up with two machines fighting over one database:
+
+```
+%LOCALAPPDATA%/Prosody/
+  prosody.db  settings.json  Cache/  Logs/
+```
+
+In portable mode both collapse into `Data/` beside the executable.
 
 Output folders are versioned (`_V001`, `_V002`, …) and never overwritten.
 Change the location under **Settings → Export folder**.
@@ -209,12 +237,14 @@ matter most:
 | [docs/privacy.md](docs/privacy.md) | What leaves your computer (nothing) |
 | [docs/testing.md](docs/testing.md) | Test tiers and how to run them |
 | [docs/design-system.md](docs/design-system.md) | The monochrome UI system and its rules |
+| [RELEASE.md](RELEASE.md) | The release directive this build follows |
+| [RELEASE_NOTES.md](RELEASE_NOTES.md) | What ships in v0.1.0 |
 | [docs/flp-compatibility.md](docs/flp-compatibility.md) | FLP format notes, verified and not |
 
 ## Tests
 
 ```bash
-pytest                              # 466 unit tests; corpus and render auto-skip
+pytest                              # 524 unit tests; corpus and render auto-skip
 pytest -m corpus                    # needs real .flp files in corpus/
 FLPF_RENDER=1 pytest -m render      # studio PC only
 ```

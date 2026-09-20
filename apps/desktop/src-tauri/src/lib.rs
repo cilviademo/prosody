@@ -1,100 +1,148 @@
 //! Prosody desktop shell.
 //!
-//! The window is a thin orchestrator: it locates the Python backend, forwards
-//! API calls to it, streams progress events to the UI, and performs the few
-//! things a browser genuinely cannot do - open a file picker, reveal a folder,
-//! and launch FL Studio.
+//! The window is a thin orchestrator. It resolves where files live, starts the
+//! Prosody core and completes the ping handshake, forwards API calls to it, and
+//! performs the few things a browser genuinely cannot: open a file picker,
+//! reveal a folder, and launch FL Studio.
+//!
+//! Startup order matters and is fixed:
+//!   1. WebView2 check (without it the window is simply blank)
+//!   2. portable-mode check
+//!   3. create directories
+//!   4. start the core and ping it
+//! A failure at step 4 leaves the window up with a diagnostics payload rather
+//! than a blank frame or a crash.
 
-mod python;
+mod core;
+mod paths;
+mod webview2;
 
-use python::Backend;
-use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use tauri::{Emitter, Manager};
+use std::sync::Mutex;
+use std::time::Duration;
+
+use serde::Serialize;
+use serde_json::{json, Value};
+use tauri::{Manager, State};
+
+use crate::core::{Core, REQUEST_TIMEOUT};
+use crate::paths::Paths;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-#[derive(Serialize, Clone)]
-struct Progress {
-    stage: String,
-    status: String,
-    detail: String,
+/// Everything the window needs, resolved once at startup.
+struct AppState {
+    paths: Paths,
+    core: Mutex<Option<Core>>,
+    startup_error: Mutex<Option<String>>,
+    core_version: Mutex<String>,
 }
 
-fn backend(app: &tauri::AppHandle) -> Result<Backend, String> {
-    let resource_dir = app.path().resource_dir().ok();
-    Backend::resolve(resource_dir)
+#[derive(Serialize)]
+struct Status {
+    ok: bool,
+    portable: bool,
+    documents: String,
+    state: String,
+    logs: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    core_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    core_executable: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
-/// Call a backend method. Progress lines are emitted as `build-progress`
-/// events; the final `result` line is returned to the caller.
+/// Call a core method. Progress lines are emitted as `build-progress` events.
 #[tauri::command]
 async fn api(
     app: tauri::AppHandle,
+    state: State<'_, AppState>,
     method: String,
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let body = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
-    let handle = app.clone();
+    payload: Value,
+) -> Result<Value, String> {
+    let mut guard = state
+        .core
+        .lock()
+        .map_err(|_| "the core connection is poisoned".to_string())?;
+    let core = guard.as_mut().ok_or_else(|| {
+        state
+            .startup_error
+            .lock()
+            .ok()
+            .and_then(|e| e.clone())
+            .unwrap_or_else(|| "The Prosody core is not running.".to_string())
+    })?;
 
-    // Backend calls are blocking; keep them off the UI thread.
-    let lines = tauri::async_runtime::spawn_blocking(move || {
-        let backend = backend(&handle)?;
-        backend.call(&method, &body)
-    })
-    .await
-    .map_err(|e| format!("backend task failed: {e}"))??;
-
-    let mut last: Option<serde_json::Value> = None;
-    for line in lines {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+    match core.request(Some(&app), &method, payload, REQUEST_TIMEOUT) {
+        Ok(value) => Ok(value),
+        Err(message) => {
+            // A dead core must not look like a failed request forever.
+            *state.startup_error.lock().unwrap() = Some(message.clone());
+            *guard = None;
+            Err(message)
         }
-        let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
-            continue;
-        };
-        match value.get("event").and_then(|v| v.as_str()) {
-            Some("progress") => {
-                let _ = app.emit(
-                    "build-progress",
-                    Progress {
-                        stage: value["stage"].as_str().unwrap_or_default().to_string(),
-                        status: value["status"].as_str().unwrap_or_default().to_string(),
-                        detail: value["detail"].as_str().unwrap_or_default().to_string(),
-                    },
-                );
-            }
-            Some("result") => last = Some(value),
-            _ => {}
+    }
+}
+
+/// What the UI asks on boot to decide between the app and a diagnostics screen.
+#[tauri::command]
+fn backend_status(state: State<'_, AppState>) -> Status {
+    let running = state.core.lock().map(|c| c.is_some()).unwrap_or(false);
+    let error = state.startup_error.lock().ok().and_then(|e| e.clone());
+    let version = state.core_version.lock().ok().map(|v| v.clone()).filter(|v| !v.is_empty());
+    let executable = state
+        .core
+        .lock()
+        .ok()
+        .and_then(|c| c.as_ref().map(|core| core.executable.to_string_lossy().into_owned()));
+
+    Status {
+        ok: running,
+        portable: state.paths.portable,
+        documents: state.paths.documents.to_string_lossy().into_owned(),
+        state: state.paths.state.to_string_lossy().into_owned(),
+        logs: state.paths.logs().to_string_lossy().into_owned(),
+        core_version: version,
+        core_executable: executable,
+        error,
+    }
+}
+
+/// Try to start the core again after a failure, without restarting the app.
+#[tauri::command]
+async fn restart_core(state: State<'_, AppState>) -> Result<Status, String> {
+    {
+        let mut guard = state.core.lock().map_err(|_| "poisoned".to_string())?;
+        if let Some(mut existing) = guard.take() {
+            existing.shutdown();
         }
     }
 
-    last.ok_or_else(|| "The backend returned no result.".to_string())
-}
-
-/// True when the backend can be reached at all - used for the startup check.
-#[tauri::command]
-async fn backend_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let handle = app.clone();
-    let resolved = tauri::async_runtime::spawn_blocking(move || backend(&handle))
+    let paths = state.paths.clone();
+    let started = tauri::async_runtime::spawn_blocking(move || Core::start(&paths, None))
         .await
         .map_err(|e| e.to_string())?;
-    Ok(match resolved {
-        Ok(b) => serde_json::json!({
-            "ok": true,
-            "python": b.python.to_string_lossy(),
-            "root": b.root.to_string_lossy(),
-        }),
-        Err(e) => serde_json::json!({ "ok": false, "error": e }),
-    })
+
+    match started {
+        Ok(core) => {
+            *state.core_version.lock().unwrap() = core.version.clone();
+            *state.startup_error.lock().unwrap() = None;
+            *state.core.lock().unwrap() = Some(core);
+        }
+        Err(message) => {
+            *state.startup_error.lock().unwrap() = Some(message.clone());
+            return Err(message);
+        }
+    }
+    Ok(backend_status(state))
 }
 
-/// Reveal a file or folder in Explorer.
+/// Reveal a file or folder in the system file manager.
 #[tauri::command]
 fn reveal(path: String) -> Result<(), String> {
     let target = PathBuf::from(&path);
@@ -156,7 +204,6 @@ fn open_in_fl(fl_executable: Option<String>, flp: String) -> Result<(), String> 
         return Ok(());
     }
 
-    // No configured path: let the OS open the .flp with its default handler.
     #[cfg(windows)]
     {
         let mut command = Command::new("cmd");
@@ -171,28 +218,80 @@ fn open_in_fl(fl_executable: Option<String>, flp: String) -> Result<(), String> 
     }
 }
 
-/// Read a small file (preview audio) as bytes for the in-app player.
+/// Read a render back for the in-app preview player.
 #[tauri::command]
 fn read_media(path: String) -> Result<Vec<u8>, String> {
     let target = PathBuf::from(&path);
     let size = std::fs::metadata(&target).map_err(|e| e.to_string())?.len();
-    // Guard against loading an enormous render into the webview.
     if size > 200 * 1024 * 1024 {
         return Err("This file is too large to preview in the app.".to_string());
     }
     std::fs::read(&target).map_err(|e| e.to_string())
 }
 
+/// Remember window geometry between sessions.
+#[tauri::command]
+async fn save_window(
+    state: State<'_, AppState>,
+    width: f64,
+    height: f64,
+    x: i32,
+    y: i32,
+) -> Result<(), String> {
+    let mut guard = state.core.lock().map_err(|_| "poisoned".to_string())?;
+    if let Some(core) = guard.as_mut() {
+        let params = json!({
+            "settings": { "window": { "width": width, "height": height, "x": x, "y": y } }
+        });
+        let _ = core.request(None, "settings.set", params, Duration::from_secs(10));
+    }
+    Ok(())
+}
+
 pub fn run() {
+    // 1. Without WebView2 the window renders nothing at all; say so instead.
+    if !webview2::is_installed() {
+        webview2::warn_and_exit();
+    }
+
+    // 2 & 3. Resolve the roots (portable mode included) and create them.
+    let paths = Paths::resolve();
+    if let Err(e) = paths.ensure() {
+        eprintln!("could not create application folders: {e}");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(move |app| {
+            let resource_dir = app.path().resource_dir().ok();
+
+            // 4. Start the core and ping it. A failure here is reported to the
+            // UI as a diagnostics payload, never as a blank window.
+            let (core, version, error) = match Core::start(&paths, resource_dir) {
+                Ok(core) => {
+                    let version = core.version.clone();
+                    (Some(core), version, None)
+                }
+                Err(message) => (None, String::new(), Some(message)),
+            };
+
+            app.manage(AppState {
+                paths: paths.clone(),
+                core: Mutex::new(core),
+                startup_error: Mutex::new(error),
+                core_version: Mutex::new(version),
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             api,
             backend_status,
+            restart_core,
             reveal,
             open_in_fl,
-            read_media
+            read_media,
+            save_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running Prosody");

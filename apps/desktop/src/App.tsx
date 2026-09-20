@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type {
-  BuildOutcome, Env, Genre, LibraryItem, ProgressEvent, Project, Settings,
+  BackendStatus, BuildOutcome, Env, Genre, LibraryItem, ProgressEvent, Project,
+  Settings,
 } from "./lib/types";
-import { api, backendStatus, onProgress, shell } from "./lib/api";
+import { api, backendStatus, onProgress, saveWindow, shell } from "./lib/api";
 import { Home } from "./views/Home";
 import { ProjectView } from "./views/ProjectView";
 import { ArrangeView, type ExportChoices } from "./views/ArrangeView";
 import { Progress, Result } from "./views/BuildView";
 import { Library } from "./views/Library";
 import { SettingsView } from "./views/Settings";
-import { Button, Note } from "./components/ui";
+import { Diagnostics } from "./views/Diagnostics";
+import { Note } from "./components/ui";
 
 /**
  * The Prosody mark: three strokes of unequal height — a stress pattern.
@@ -49,7 +51,7 @@ export default function App() {
 
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fatal, setFatal] = useState<string | null>(null);
+  const [status, setStatus] = useState<BackendStatus | null>(null);
 
   const pageRef = useRef<HTMLDivElement | null>(null);
 
@@ -64,26 +66,55 @@ export default function App() {
   }, []);
 
   // -- boot ---------------------------------------------------------------- //
+  const loadWorkspace = useCallback(async () => {
+    const [environment, genreList, stored] = await Promise.all([
+      api.environment(), api.genres(), api.settings(),
+    ]);
+    setEnv(environment);
+    setGenres(genreList);
+    setSettings({ ...DEFAULT_SETTINGS, ...stored });
+    refreshLibrary();
+  }, [refreshLibrary]);
+
   useEffect(() => {
     void (async () => {
-      const status = await backendStatus().catch((e) => ({ ok: false, error: String(e) }));
-      if (!status.ok) {
-        setFatal(status.error ?? "The Prosody backend could not be reached.");
-        return;
-      }
+      let reported: BackendStatus;
       try {
-        const [environment, genreList, stored] = await Promise.all([
-          api.environment(), api.genres(), api.settings(),
-        ]);
-        setEnv(environment);
-        setGenres(genreList);
-        setSettings({ ...DEFAULT_SETTINGS, ...stored });
-        refreshLibrary();
+        reported = await backendStatus();
       } catch (e) {
-        setFatal(String((e as Error).message ?? e));
+        reported = {
+          ok: false, portable: false, documents: "", state: "", logs: "",
+          error: String(e),
+        };
+      }
+      setStatus(reported);
+      if (!reported.ok) return;
+      try {
+        await loadWorkspace();
+      } catch (e) {
+        setStatus({ ...reported, ok: false, error: String((e as Error).message ?? e) });
       }
     })();
-  }, [refreshLibrary]);
+  }, [loadWorkspace]);
+
+  // Remember where the window was left.
+  useEffect(() => {
+    let timer: number | undefined;
+    const remember = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void saveWindow({
+          width: window.outerWidth, height: window.outerHeight,
+          x: window.screenX, y: window.screenY,
+        });
+      }, 500);
+    };
+    window.addEventListener("resize", remember);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", remember);
+    };
+  }, []);
 
   // -- open a project ------------------------------------------------------ //
   const openProject = useCallback((path: string) => {
@@ -176,31 +207,21 @@ export default function App() {
       .catch(() => undefined);
   }, []);
 
-  if (fatal) {
+  if (status && !status.ok) {
     return (
       <div className="shell">
         <header className="titlebar">
           <span className="wordmark"><Mark />Prosody</span>
         </header>
-        <div className="page" ref={pageRef}>
-          <div className="view enter">
-            <div className="label">Startup</div>
-            <h1 className="title" style={{ marginTop: "var(--s3)" }}>
-              Prosody could not start
-            </h1>
-            <div style={{ marginTop: "var(--s5)" }}>
-              <Note strong heading="Backend unreachable">{fatal}</Note>
-            </div>
-            <p className="copy" style={{ marginTop: "var(--s5)" }}>
-              Prosody needs Python 3.10 or newer with its backend package
-              available. Install Python, or set{" "}
-              <span className="mono">PROSODY_PYTHON</span> to the interpreter you
-              want it to use, then restart.
-            </p>
-            <div style={{ marginTop: "var(--s6)" }}>
-              <Button onClick={() => window.location.reload()}>Try again</Button>
-            </div>
-          </div>
+        <div className="page">
+          <Diagnostics
+            status={status}
+            onRecovered={(next) => {
+              setStatus(next);
+              void loadWorkspace().catch((e) =>
+                setStatus({ ...next, ok: false, error: String(e) }));
+            }}
+          />
         </div>
       </div>
     );

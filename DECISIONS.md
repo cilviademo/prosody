@@ -12,7 +12,7 @@ edited here and the reason recorded.
 | [0002](docs/adr/ADR-0002-pyflp-enum-compat.md) | Ship a 4-line compatibility shim so PyFLP works on Python 3.11+ | Accepted |
 | [0003](docs/adr/ADR-0003-synthetic-fixtures.md) | Synthetic real-binary `.flp` fixtures for the unit tier | Accepted |
 | [0004](docs/adr/ADR-0004-role-vocabulary.md) | One closed 11-value role vocabulary, with aliases for the finer terms | Accepted |
-| [0005](docs/adr/ADR-0005-repo-name.md) | Repo `prosody`, package `flpfinisher`, CLI `flpf` | Accepted (reversible) |
+| [0005](docs/adr/ADR-0005-repo-name.md) | Repo `prosody`, package `prosody_core`, CLI `flpf` | Accepted (reversible) |
 
 ## Smaller decisions
 

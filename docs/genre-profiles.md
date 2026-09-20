@@ -1,7 +1,7 @@
 # Genre profiles
 
 Genre is **data, not code**. Adding a genre means adding a JSON file to
-`flpfinisher/arrange/profiles/`, never editing a function.
+`prosody_core/arrange/profiles/`, never editing a function.
 
 Two ship in v1: `hiphop.json`, `rnb.json`. Both are loaded and validated against
 `GenreProfile` by the unit tier, so a malformed profile fails tests immediately.

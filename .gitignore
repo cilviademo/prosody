@@ -3,6 +3,7 @@ corpus/*
 !corpus/README.md
 out/
 *.flp
+!prosody_core/assets/*.flp
 *.wav
 *.mp3
 *.mid
@@ -33,3 +34,6 @@ dist/
 htmlcov/
 .ruff_cache/
 .mypy_cache/
+
+# Release artefacts
+release/

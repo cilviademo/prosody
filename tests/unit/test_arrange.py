@@ -2,27 +2,27 @@
 
 import pytest
 
-from flpfinisher.arrange import profiles
-from flpfinisher.arrange.energy import active_roles, dropout_bars
-from flpfinisher.arrange.permissions import (
+from prosody_core.arrange import profiles
+from prosody_core.arrange.energy import active_roles, dropout_bars
+from prosody_core.arrange.permissions import (
     PermissionDenied,
     assert_allowed,
     assert_plan_allowed,
     describe,
     is_allowed,
 )
-from flpfinisher.arrange.planner import (
+from prosody_core.arrange.planner import (
     PlanningError,
     build_plan,
     build_variants,
     parse_grammar,
     pattern_roles,
 )
-from flpfinisher.classify.signals import analyse_project
-from flpfinisher.health.check import classify_state
-from flpfinisher.model.roles import Role
-from flpfinisher.model.schemas import PermissionLevel, PlaylistOp, SectionType
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
+from prosody_core.classify.signals import analyse_project
+from prosody_core.health.check import classify_state
+from prosody_core.model.roles import Role
+from prosody_core.model.schemas import PermissionLevel, PlaylistOp, SectionType
+from prosody_core.parse.pyflp_backend import PyFLPBackend
 from tests.fixtures.projects import full_kit, melody_only, no_notes
 
 ALL = {Role.KICK, Role.SNARE, Role.HATS, Role.BASS, Role.CHORDS, Role.MELODY}

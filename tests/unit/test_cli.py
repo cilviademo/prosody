@@ -3,8 +3,8 @@
 from fixtures.flp_builder import multi_pattern_loop, one_pattern_loop, write_flp
 from typer.testing import CliRunner
 
-from flpfinisher.cli import app
-from flpfinisher.fs.safety import sha256_file
+from prosody_core.cli import app
+from prosody_core.fs.safety import sha256_file
 
 runner = CliRunner()
 
@@ -25,7 +25,7 @@ def test_doctor_fails_when_render_is_demanded_without_fl(monkeypatch):
     monkeypatch.setenv("FLPF_RENDER", "1")
     result = runner.invoke(app, ["doctor"])
     # On a machine without FL Studio this must be a hard failure, not a warning.
-    from flpfinisher.env import find_fl_executable
+    from prosody_core.env import find_fl_executable
 
     if find_fl_executable()[0] is None:
         assert result.exit_code == 1

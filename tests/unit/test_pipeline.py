@@ -5,9 +5,9 @@ import json
 import pytest
 from fixtures.flp_builder import multi_pattern_loop, one_pattern_loop, write_flp
 
-from flpfinisher.fs.safety import CorpusMutated, sha256_file
-from flpfinisher.model.schemas import BeatProject
-from flpfinisher.pipeline import (
+from prosody_core.fs.safety import CorpusMutated, sha256_file
+from prosody_core.model.schemas import BeatProject
+from prosody_core.pipeline import (
     inspect_project,
     scan_directory,
     write_scan_errors,
@@ -69,7 +69,7 @@ def test_a_source_mutated_mid_run_fails_the_run(make_flp, tmp_path, monkeypatch)
     path = make_flp(one_pattern_loop())
 
     # Simulate a stage writing to the source: the guard must catch it.
-    import flpfinisher.pipeline as pipeline
+    import prosody_core.pipeline as pipeline
 
     original = pipeline.write_artifacts
     monkeypatch.setattr(

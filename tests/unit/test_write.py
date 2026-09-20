@@ -2,16 +2,16 @@
 
 import pytest
 
-from flpfinisher.arrange import profiles
-from flpfinisher.arrange.permissions import PermissionDenied
-from flpfinisher.arrange.planner import build_plan
-from flpfinisher.classify.signals import analyse_project
-from flpfinisher.fs.safety import sha256_file
-from flpfinisher.health.check import classify_state
-from flpfinisher.model.schemas import PermissionLevel, PlaylistOp
-from flpfinisher.parse.pyflp_backend import PyFLPBackend
-from flpfinisher.validate.validator import notes_unchanged, validate_derivative
-from flpfinisher.write.eventstream import (
+from prosody_core.arrange import profiles
+from prosody_core.arrange.permissions import PermissionDenied
+from prosody_core.arrange.planner import build_plan
+from prosody_core.classify.signals import analyse_project
+from prosody_core.fs.safety import sha256_file
+from prosody_core.health.check import classify_state
+from prosody_core.model.schemas import PermissionLevel, PlaylistOp
+from prosody_core.parse.pyflp_backend import PyFLPBackend
+from prosody_core.validate.validator import notes_unchanged, validate_derivative
+from prosody_core.write.eventstream import (
     MalformedFLP,
     diff_events,
     read_flp,
@@ -19,7 +19,7 @@ from flpfinisher.write.eventstream import (
     write_flp,
     write_varint,
 )
-from flpfinisher.write.flp_writer import (
+from prosody_core.write.flp_writer import (
     WriteUnsupported,
     detect_item_size,
     plan_to_clips,
@@ -155,7 +155,7 @@ def test_tiling_length_is_quantised_to_whole_bars(prepared):
     Tiling at the measured extent would drift every repetition off the grid.
     """
     project, _, _plan = prepared
-    from flpfinisher.write.flp_writer import _pattern_lengths
+    from prosody_core.write.flp_writer import _pattern_lengths
 
     bar = PPQ * 4
     measured = {p.index: p.length_ticks for p in project.patterns}
@@ -308,7 +308,7 @@ def test_validation_checks_the_planned_length(prepared, source, backend, tmp_pat
 
 
 def test_level_one_writer_gate_is_declared():
-    from flpfinisher.write.flp_writer import level_permits_note_edits
+    from prosody_core.write.flp_writer import level_permits_note_edits
 
     assert not level_permits_note_edits(PermissionLevel.STRUCTURE_ONLY)
     assert level_permits_note_edits(PermissionLevel.CONSERVATIVE)

@@ -9,12 +9,12 @@ import json
 
 import pytest
 
-from flpfinisher import api as api_module
-from flpfinisher.build import BuildOptions, build, output_name, prepare_output_dir
-from flpfinisher.fs.safety import sha256_file
-from flpfinisher.index import db
-from flpfinisher.model.schemas import OutputTier, PermissionLevel, StageStatus
-from flpfinisher.workspace import Workspace
+from prosody_core import api as api_module
+from prosody_core.build import BuildOptions, build, output_name, prepare_output_dir
+from prosody_core.fs.safety import sha256_file
+from prosody_core.index import db
+from prosody_core.model.schemas import OutputTier, PermissionLevel, StageStatus
+from prosody_core.workspace import Workspace
 from tests.fixtures.projects import full_kit, melody_only, no_notes
 
 
@@ -66,7 +66,7 @@ def test_migrations_apply_once(workspace):
 
 
 def test_projects_upsert_rather_than_duplicate(workspace):
-    from flpfinisher.model.schemas import LibraryEntry
+    from prosody_core.model.schemas import LibraryEntry
 
     db.migrate(workspace.db_path)
     for name in ("First", "Second"):
@@ -81,7 +81,7 @@ def test_listing_an_absent_database_is_empty(tmp_path):
 
 
 def test_forgetting_a_project_removes_only_the_row(workspace):
-    from flpfinisher.model.schemas import LibraryEntry
+    from prosody_core.model.schemas import LibraryEntry
 
     db.migrate(workspace.db_path)
     db.upsert_project(workspace.db_path, LibraryEntry(
@@ -349,10 +349,10 @@ def test_key_detection_returns_a_label_and_confidence(source, workspace):
 
 
 def test_sanitised_llm_payload_contains_no_paths_or_names(source, workspace):
-    from flpfinisher.ai.planner import PlanRequest, sanitise
-    from flpfinisher.classify.signals import analyse_project
-    from flpfinisher.health.check import classify_state
-    from flpfinisher.parse.pyflp_backend import PyFLPBackend
+    from prosody_core.ai.planner import PlanRequest, sanitise
+    from prosody_core.classify.signals import analyse_project
+    from prosody_core.health.check import classify_state
+    from prosody_core.parse.pyflp_backend import PyFLPBackend
 
     project = PyFLPBackend().parse(source)
     analysis = analyse_project(project, classify_state(project))
@@ -364,17 +364,17 @@ def test_sanitised_llm_payload_contains_no_paths_or_names(source, workspace):
 
 
 def test_the_rule_planner_is_always_available():
-    from flpfinisher.ai.planner import RuleBasedPlanner
+    from prosody_core.ai.planner import RuleBasedPlanner
 
     ok, _ = RuleBasedPlanner().available()
     assert ok
 
 
 def test_an_llm_provider_falls_back_instead_of_failing(source):
-    from flpfinisher.ai.planner import ClaudePlanner, PlanRequest
-    from flpfinisher.classify.signals import analyse_project
-    from flpfinisher.health.check import classify_state
-    from flpfinisher.parse.pyflp_backend import PyFLPBackend
+    from prosody_core.ai.planner import ClaudePlanner, PlanRequest
+    from prosody_core.classify.signals import analyse_project
+    from prosody_core.health.check import classify_state
+    from prosody_core.parse.pyflp_backend import PyFLPBackend
 
     project = PyFLPBackend().parse(source)
     analysis = analyse_project(project, classify_state(project))
@@ -388,7 +388,7 @@ def test_an_llm_provider_falls_back_instead_of_failing(source):
 
 def test_stored_fl_path_is_used_over_discovery(workspace, tmp_path):
     """The Settings screen saves a path; the environment must honour it."""
-    from flpfinisher.env import describe
+    from prosody_core.env import describe
 
     fake = tmp_path / "FL64.exe"
     fake.write_bytes(b"")
@@ -398,7 +398,7 @@ def test_stored_fl_path_is_used_over_discovery(workspace, tmp_path):
 
 
 def test_a_stored_fl_path_that_no_longer_exists_is_reported(tmp_path):
-    from flpfinisher.env import describe
+    from prosody_core.env import describe
 
     env = describe({"fl_executable": str(tmp_path / "gone.exe")})
     assert env.fl_executable is None
@@ -407,7 +407,7 @@ def test_a_stored_fl_path_that_no_longer_exists_is_reported(tmp_path):
 
 def test_the_rendering_toggle_enables_rendering(tmp_path, monkeypatch):
     """Without this wiring the toggle saves a preference nothing reads."""
-    from flpfinisher.env import describe
+    from prosody_core.env import describe
 
     monkeypatch.delenv("FLPF_RENDER", raising=False)
     assert describe({}).render_enabled is False
@@ -415,7 +415,7 @@ def test_the_rendering_toggle_enables_rendering(tmp_path, monkeypatch):
 
 
 def test_the_environment_flag_still_works_for_the_cli(monkeypatch):
-    from flpfinisher.env import describe
+    from prosody_core.env import describe
 
     monkeypatch.setenv("FLPF_RENDER", "1")
     assert describe({}).render_enabled is True
@@ -430,3 +430,56 @@ def test_environment_endpoint_reflects_saved_settings(workspace, tmp_path):
     result, _ = call("environment", {}, workspace)
     assert result["data"]["flExecutable"] == str(fake)
     assert result["data"]["canRender"] is True
+
+
+# -- workspace layout -------------------------------------------------------- #
+
+def test_user_output_and_app_state_live_apart(tmp_path):
+    """Documents holds exports; LOCALAPPDATA holds the database and settings.
+
+    Keeping the SQLite file out of a cloud-synced Documents folder avoids two
+    machines fighting over one database.
+    """
+    ws = Workspace.open(root=tmp_path / "Docs", state=tmp_path / "State")
+    assert ws.exports.is_relative_to(tmp_path / "Docs")
+    assert ws.projects.is_relative_to(tmp_path / "Docs")
+    for path in (ws.db_path, ws.settings_path, ws.cache, ws.logs):
+        assert path.is_relative_to(tmp_path / "State")
+    assert not ws.is_portable
+
+
+def test_portable_mode_keeps_everything_in_one_folder(tmp_path):
+    data = tmp_path / "Data"
+    ws = Workspace.portable(data)
+    assert ws.is_portable
+    for path in (ws.exports, ws.projects, ws.db_path, ws.settings_path,
+                 ws.cache, ws.logs):
+        assert path.is_relative_to(data)
+
+
+def test_naming_a_root_alone_keeps_state_with_it(tmp_path):
+    """Otherwise an explicit root silently shares the machine-wide database."""
+    ws = Workspace.open(tmp_path / "Somewhere")
+    assert ws.state == ws.root == tmp_path / "Somewhere"
+
+
+def test_settings_persist_in_the_state_root(tmp_path):
+    ws = Workspace.open(root=tmp_path / "Docs", state=tmp_path / "State")
+    ws.save_settings({"wav_bit_depth": 32})
+    assert (tmp_path / "State" / "settings.json").is_file()
+    assert not (tmp_path / "Docs" / "settings.json").exists()
+    assert Workspace.open(root=tmp_path / "Docs",
+                          state=tmp_path / "State").load_settings()["wav_bit_depth"] == 32
+
+
+def test_the_render_stage_warns_that_fl_will_open(source, tmp_path):
+    """FL shows its own window during a CLI render and cannot be hidden."""
+    seen: list[tuple[str, str, str]] = []
+    build(
+        source, export_root=tmp_path / "Exports",
+        options=BuildOptions(want_wav=True, want_mp3=True),
+        progress=lambda stage, status, detail: seen.append((stage, status, detail)),
+    )
+    starts = [d for stage, st, d in seen
+              if stage == "Rendering audio" and st == "running"]
+    assert starts and "FL Studio will open" in starts[0]

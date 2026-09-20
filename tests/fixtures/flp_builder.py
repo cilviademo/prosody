@@ -6,7 +6,7 @@ FLP binaries - byte-for-byte the FLhd/FLdt container FL Studio writes - so the
 parser is exercised against the actual format rather than a mock.
 
 It is a **test fixture, not a project writer**. It covers only the events the
-reader needs. It is deliberately not in ``flpfinisher/``: nothing in the
+reader needs. It is deliberately not in ``prosody_core/``: nothing in the
 application may depend on it, and it must never be pointed at a real project.
 
 Format reference (verified against PyFLP 2.2.1 during Phase 0):

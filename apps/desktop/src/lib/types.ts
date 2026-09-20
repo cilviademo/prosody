@@ -1,4 +1,4 @@
-/** Shapes returned by the Python backend. Mirrors flpfinisher/api.py. */
+/** Shapes returned by the Python backend. Mirrors prosody_core/api.py. */
 
 export type HealthStatus =
   | "READY" | "PARTIAL" | "REQUIRES_FREEZE" | "BLOCKED" | "UNKNOWN";
@@ -117,3 +117,15 @@ export interface Settings {
 }
 
 export interface ProgressEvent { stage: string; status: string; detail: string }
+
+/** What the shell reports about itself on boot. */
+export interface BackendStatus {
+  ok: boolean;
+  portable: boolean;
+  documents: string;
+  state: string;
+  logs: string;
+  coreVersion?: string;
+  coreExecutable?: string;
+  error?: string;
+}

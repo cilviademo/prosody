@@ -1,7 +1,7 @@
 # project.json (BeatProject)
 
 Normalised, backend-independent view of one `.flp`. Written to
-`out/<slug>/DATA/project.json`. Defined in `flpfinisher/model/schemas.py`;
+`out/<slug>/DATA/project.json`. Defined in `prosody_core/model/schemas.py`;
 changing it requires an ADR.
 
 `schema_version` is `"1.0"`.

@@ -48,7 +48,7 @@ Options:
 
 ## Decision
 
-Option 3. `flpfinisher/parse/_pyflp_compat.py` seeds `EventEnum._member_map_`
+Option 3. `prosody_core/parse/_pyflp_compat.py` seeds `EventEnum._member_map_`
 with a single sentinel whose value is `-1` — outside the 0–255 range an event id
 can occupy. The guard then passes and `_missing_` runs exactly as upstream
 intends. `_member_names_` is left untouched, so `list(EventEnum)`, iteration and

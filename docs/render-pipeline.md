@@ -25,7 +25,7 @@ switch would not be.
 
 ## FL Studio discovery
 
-`flpfinisher/env.py`, in order: `FLPF_FL_EXE` override → registry
+`prosody_core/env.py`, in order: `FLPF_FL_EXE` override → registry
 (`HKLM\SOFTWARE\Image-Line\Shared\Paths`, plus the WOW6432Node mirror) →
 conventional install roots → `PATH`. No path is hardcoded as the only option.
 

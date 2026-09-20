@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from flpfinisher.fs.safety import (
+from prosody_core.fs.safety import (
     CorpusMutated,
     ReadOnlyCorpus,
     find_flps,
