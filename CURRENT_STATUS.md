@@ -40,7 +40,12 @@ Verified by running it here, on Linux, against synthetic projects.
   checking a path exists.
 - **Settings take effect** — FL path and Rendering toggle are read by the
   environment resolver.
-- **524 unit tests, ruff clean, tsc clean, zero Rust warnings.**
+- **526 unit tests, ruff clean, tsc clean, zero Rust warnings** — verified in a
+  clean virtualenv, not just the development one.
+- **CI runs on every push** (`.github/workflows/ci.yml`) and already earned its
+  keep: the first run failed because `mido` was declared as an optional extra
+  while every build imports it, so a fresh install had no MIDI export. Fixed,
+  and a test now asserts every imported package is a required dependency.
 
 ## PARTIAL
 
@@ -49,6 +54,11 @@ Verified by running it here, on Linux, against synthetic projects.
   all written; the spec is proven on Linux. The Windows path has never
   executed. **Expect the first tag build to need one fix** — a missing DLL or a
   resource path is the usual shape.
+- **The release has not been tagged.** This session's credentials can push the
+  working branch but are refused (HTTP 403) on tag refs, and lack
+  `actions: write` to dispatch the workflow manually. The workflow is committed
+  and registered; someone with write access has to run
+  `git tag v0.1.0 && git push origin v0.1.0` to produce the artefacts.
 - **WebView2 detection** reads the Edge Update registry keys under HKLM and
   HKCU. The logic compiles and is Windows-only, so it has not been exercised.
 - **Window geometry** is saved on resize; it is not yet restored on launch or

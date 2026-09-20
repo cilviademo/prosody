@@ -12,16 +12,17 @@ license = { text = "Proprietary" }
 dependencies = [
   "pyflp>=2.2.1",      # only .flp parser with a public Python API; isolated behind parse/adapter.py
   "pydantic>=2.0",     # the data contract; v2 validators enforce permission levels structurally
+  "mido>=1.3",         # per-role .mid export, which every build performs
   "typer>=0.12",       # CLI arg parsing without hand-rolled argparse
   "rich>=13.0",        # console tables; also Typer's renderer
 ]
 
 [project.optional-dependencies]
-# Deferred to their phases; listed so the intent is recorded, not installed yet.
-extract = [
-  "mido>=1.3",         # per-role .mid writing (Phase 2)
-  "numpy>=1.26",       # stem stitching maths (Phase 4 preview)
-  "soundfile>=0.12",   # WAV read/write for previews and null tests (Phase 4)
+# Not imported by anything today. Listed so the intent is recorded and so the
+# PyInstaller spec does not ship ~50 MB of unused DLLs in every release.
+preview = [
+  "numpy>=1.26",       # stem stitching maths (preview/stitch.py, not yet built)
+  "soundfile>=0.12",   # WAV read/write for previews and stem null tests
 ]
 dev = [
   "pytest>=8.0",

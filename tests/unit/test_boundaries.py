@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -168,3 +169,58 @@ def test_the_interface_is_literally_monochrome():
                 offenders.append(f"{path.name}: rgb({r},{g},{b})")
 
     assert not offenders, f"non-neutral colours: {sorted(set(offenders))}"
+
+
+# -- packaging -------------------------------------------------------------- #
+
+#: Modules that ship with CPython, so they need no declaration.
+_STDLIB = set(sys.stdlib_module_names) | {"prosody_core", "tests"}
+
+
+def _declared_dependencies() -> set[str]:
+    """Distribution names in pyproject's required dependencies."""
+    text = (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    block = text.split("dependencies = [", 1)[1].split("]", 1)[0]
+    names = set()
+    for line in block.splitlines():
+        entry = line.strip().strip('",').split("#", 1)[0].strip().strip('"')
+        if entry:
+            names.add(re.split(r"[<>=!~\[]", entry)[0].strip().lower())
+    return names
+
+
+def test_every_imported_package_is_a_required_dependency():
+    """A module imported at runtime but declared as an optional extra is a
+    broken install: it works in the developer's venv and fails on a clean one.
+
+    Caught exactly once already — `mido` is imported by every build and was
+    sitting in an optional extra, so CI's fresh environment had no MIDI export.
+    """
+    declared = _declared_dependencies()
+    #: import name -> distribution name, where they differ.
+    aliases = {"pydantic_core": "pydantic"}
+
+    missing: set[str] = set()
+    for path in python_files():
+        for root in imported_roots(path):
+            if root in _STDLIB or root.startswith("_"):
+                continue
+            name = aliases.get(root, root).replace("_", "-").lower()
+            if name not in declared:
+                missing.add(f"{root} (imported by {path.name})")
+
+    assert not missing, (
+        f"imported but not a required dependency: {sorted(missing)}. "
+        "Move it into [project] dependencies, or stop importing it."
+    )
+
+
+def test_pinned_requirements_cover_the_required_dependencies():
+    """requirements.txt is what CI and the PyInstaller build install."""
+    pinned = {
+        re.split(r"[<>=!~]", line.split("#")[0].strip())[0].strip().lower()
+        for line in (REPO / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    missing = _declared_dependencies() - pinned
+    assert not missing, f"not pinned in requirements.txt: {sorted(missing)}"
