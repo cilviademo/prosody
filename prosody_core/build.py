@@ -91,6 +91,10 @@ class _Recorder:
             self.progress(name, status.value, detail)
 
 
+class SafeModeError(RuntimeError):
+    """Raised when a write is attempted in Safe Mode."""
+
+
 def artifact(kind: ArtifactKind, path: Path, label: str) -> Artifact:
     path = Path(path)
     return Artifact(
@@ -136,6 +140,14 @@ def build(
     """Run a full build. Always returns a result; never raises for user input."""
     source = Path(source)
     env = env or describe()
+    if env.safe_mode:
+        # Safe Mode exists so a user whose last session ended badly can still
+        # open Prosody, look at their library and read Diagnostics. Refusing
+        # here rather than part-way through is the point: nothing is written.
+        raise SafeModeError(
+            "Safe Mode is on, so nothing is written. Restart Prosody normally "
+            "to build, or remove safemode.flag from the Prosody folder."
+        )
     backend = PyFLPBackend()
     recorder = _Recorder(progress=progress)
 

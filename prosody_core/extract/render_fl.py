@@ -55,8 +55,12 @@ class RenderResult:
 def availability(env: Environment | None = None) -> tuple[bool, str]:
     """(can_render, human-readable reason)."""
     env = env or describe()
+    if env.safe_mode:
+        return False, "Safe Mode is on, so FL Studio is never launched"
     if env.fl_executable is None:
         return False, f"FL Studio not found — {env.fl_discovery}"
+    if not env.fl_architecture_ok:
+        return False, f"the configured FL Studio is {env.fl_architecture}"
     if not env.render_enabled:
         return False, "rendering is turned off"
     return True, f"FL Studio at {env.fl_executable}"

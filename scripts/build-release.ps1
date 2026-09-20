@@ -40,6 +40,12 @@ if (-not $SkipCore) {
     & ".venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
     & ".venv\Scripts\python.exe" -m pip install --quiet -r requirements.txt pyinstaller
     & ".venv\Scripts\python.exe" -m PyInstaller prosody-core.spec --noconfirm --clean
+    if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+
+    # Records what produced this build, and the core's hash so the core can
+    # re-verify itself at startup (HARDENING P0.1).
+    & ".venv\Scripts\python.exe" scripts\build_info.py dist\prosody-core
+    if ($LASTEXITCODE -ne 0) { throw "could not write the build manifest" }
 
     # -- 2. into the Tauri resources ---------------------------------------
     $dest = Join-Path $tauri "resources\prosody-core"

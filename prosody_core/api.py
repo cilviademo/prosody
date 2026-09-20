@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from prosody_core import build as build_module
+from prosody_core import buildinfo
 from prosody_core.ai.planner import PROVIDERS, PlanRequest, get_planner
 from prosody_core.arrange import profiles
 from prosody_core.arrange.planner import PlanningError, pattern_roles
@@ -255,9 +256,14 @@ def h_environment(payload: dict[str, Any], workspace: Workspace) -> dict[str, An
         "renderReason": render_reason,
         "stemStrategy": strategy.name if strategy else None,
         "stemReason": stem_reason,
+        "flArchitecture": env.fl_architecture,
+        "flArchitectureOk": env.fl_architecture_ok,
         "workspace": str(workspace.root),
         "exportRoot": str(workspace.export_root()),
         "providers": sorted(PROVIDERS),
+        "build": buildinfo.describe().as_dict(),
+        "safeMode": env.safe_mode,
+        "database": db.check_integrity(workspace.db_path).detail,
     }
 
 
@@ -457,6 +463,67 @@ def h_library(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     }
 
 
+def h_library_rebuild(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Reconstruct the library by rescanning the export folder.
+
+    The index is an index, never the source of truth: every row it holds was
+    written from a ``data/project.json`` that is still sitting in the export
+    folder. That is what makes discarding a corrupt database safe, and this is
+    the other half of that promise — it is also the repair when rows go stale
+    or a database is restored from an older backup (HARDENING P0.2).
+    """
+    integrity = db.check_integrity(workspace.db_path)
+    db.migrate(workspace.db_path)
+
+    export_root = workspace.export_root()
+    recovered = 0
+    skipped: list[str] = []
+    seen: set[str] = set()
+
+    # Newest last, so that when one source has several builds the most recent
+    # one wins the row.
+    folders = sorted(
+        (d for d in export_root.glob("*") if d.is_dir()),
+        key=lambda d: d.stat().st_mtime,
+    ) if export_root.is_dir() else []
+
+    for folder in folders:
+        manifest = folder / "data" / "project.json"
+        if not manifest.is_file():
+            continue
+        try:
+            project = BeatProject.model_validate_json(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            skipped.append(f"{folder.name}: {exc}")
+            continue
+
+        health_file = folder / "reports" / "health.json"
+        health = HealthStatus.UNKNOWN
+        if health_file.is_file():
+            try:
+                raw = json.loads(health_file.read_text(encoding="utf-8")).get("status")
+                health = HealthStatus(raw) if raw else HealthStatus.UNKNOWN
+            except (OSError, ValueError):
+                health = HealthStatus.UNKNOWN
+
+        source = Path(project.source_path) if project.source_path else folder
+        _remember(
+            workspace, source, project, health, None,
+            status="Built", out_dir=str(folder),
+        )
+        seen.add(project.id)
+        recovered += 1
+
+    return {
+        "recovered": recovered,
+        "projects": len(seen),
+        "skipped": skipped,
+        "scanned": str(export_root),
+        "databaseWasCorrupt": not integrity.ok,
+        "quarantined": str(integrity.quarantined) if integrity.quarantined else None,
+    }
+
+
 def h_library_forget(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     db.migrate(workspace.db_path)
     db.forget_project(workspace.db_path, str(payload["id"]))
@@ -511,6 +578,7 @@ HANDLERS: dict[str, Handler] = {
     "build.run": h_build,
     "library.list": h_library,
     "library.forget": h_library_forget,
+    "library.rebuild": h_library_rebuild,
     "project.verify": h_verify,
     "fl.test": h_test_fl,
 }

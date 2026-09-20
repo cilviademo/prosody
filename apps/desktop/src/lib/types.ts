@@ -85,12 +85,29 @@ export interface BuildOutcome {
   stages: Stage[]; artifacts: Artifact[];
 }
 
+export interface BuildInfo {
+  frozen: boolean;
+  hashMatches: boolean | null;
+  warnings: string[];
+  build: string;
+  prosodyVersion?: string;
+  gitCommit?: string;
+  builtAt?: string;
+  builtOn?: string;
+  pythonVersion?: string;
+  pyinstallerVersion?: string;
+  pyflpVersion?: string;
+  coreSha256?: string;
+}
+
 export interface Env {
   platform: string; python: string; pyflp: string; compatShim: boolean;
   flExecutable: string | null; flDiscovery: string; ffmpeg: string | null;
+  flArchitecture: string | null; flArchitectureOk: boolean;
   canRender: boolean; renderReason: string;
   stemStrategy: string | null; stemReason: string;
   workspace: string; exportRoot: string; providers: string[];
+  safeMode: boolean; database: string; build: BuildInfo;
 }
 
 export interface Genre {

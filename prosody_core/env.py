@@ -18,6 +18,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from prosody_core.fs import pe
+
 FL_EXE_NAMES = ("FL64.exe", "FL.exe")
 
 #: Editions newest first, so a machine with several installs offers the newest.
@@ -67,10 +69,23 @@ class Environment:
     pyflp_compat_shim: bool
     render_enabled: bool
     gui_enabled: bool
+    #: Architecture of the configured FL executable, for the UI to report.
+    #: None when no FL is configured or it could not be read.
+    fl_architecture: str | None = None
+    #: False only when FL is configured and is *not* a 64-bit Windows program.
+    fl_architecture_ok: bool = True
+    #: Safe Mode: inspect and browse only. Nothing is written and nothing is
+    #: launched (HARDENING P0.2).
+    safe_mode: bool = False
 
     @property
     def can_render(self) -> bool:
-        return self.render_enabled and self.fl_executable is not None
+        return (
+            self.render_enabled
+            and self.fl_executable is not None
+            and self.fl_architecture_ok
+            and not self.safe_mode
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -94,6 +109,16 @@ def bundled_bin_dir() -> Path | None:
         if candidate.is_dir():
             return candidate
     return None
+
+
+def safe_mode() -> bool:
+    """Whether this session may only look, never touch.
+
+    The shell decides (a --safe argument, a safemode.flag beside the
+    executable, or Shift held at launch) and tells the core through the
+    environment, so there is one answer for the whole process tree.
+    """
+    return os.environ.get("PROSODY_SAFE_MODE", "") == "1"
 
 
 def find_ffmpeg() -> Path | None:
@@ -200,6 +225,16 @@ def describe(settings: Mapping[str, object] | None = None) -> Environment:
     else:
         fl_exe, how = find_fl_executable()
 
+    # A path that exists is not yet a program that can run. Reading two fields
+    # of the PE header here turns "the render failed" into "that file is
+    # 32-bit" (HARDENING P0.1).
+    architecture: str | None = None
+    architecture_ok = True
+    if fl_exe is not None and sys.platform == "win32":
+        architecture_ok, architecture = pe.describe(fl_exe)
+        if not architecture_ok:
+            how = f"{how}, but it is {architecture}"
+
     return Environment(
         platform=sys.platform,
         python_version=".".join(str(p) for p in sys.version_info[:3]),
@@ -210,4 +245,7 @@ def describe(settings: Mapping[str, object] | None = None) -> Environment:
         pyflp_compat_shim=_COMPAT_APPLIED,
         render_enabled=bool(settings.get("render_enabled")) or flag("FLPF_RENDER"),
         gui_enabled=bool(settings.get("gui_stems_enabled")) or flag("FLPF_GUI"),
+        fl_architecture=architecture,
+        fl_architecture_ok=architecture_ok,
+        safe_mode=safe_mode(),
     )

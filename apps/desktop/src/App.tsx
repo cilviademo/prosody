@@ -285,6 +285,16 @@ export default function App() {
         </button>
       </header>
 
+      {env?.safeMode && (
+        <div className="safe-mode" role="status">
+          <strong>Safe Mode.</strong> Prosody will not write files or start FL
+          Studio. You can inspect projects, browse the Library and read
+          Diagnostics. To leave Safe Mode, close Prosody, delete{" "}
+          <span className="mono">safemode.flag</span> from the Prosody folder if
+          it is there, and start it again without holding Shift.
+        </div>
+      )}
+
       <div className="page" ref={pageRef}>
         {tab === "finish" && step === "home" && (
           <Home onOpen={openProject} recent={library} busy={opening} error={error} />

@@ -14,6 +14,7 @@
 //! than a blank frame or a crash.
 
 mod core;
+mod pe;
 mod paths;
 mod webview2;
 
@@ -25,6 +26,7 @@ use std::time::Duration;
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{Manager, State};
+use tauri_plugin_opener as opener;
 
 use crate::core::{Core, REQUEST_TIMEOUT};
 use crate::paths::Paths;
@@ -172,21 +174,18 @@ fn reveal(path: String) -> Result<(), String> {
         return Ok(());
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open").arg(&target).spawn().map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-
-    #[cfg(all(unix, not(target_os = "macos")))]
+    // Only Explorer can select a file inside its folder, so Windows keeps a
+    // direct spawn of a known system binary. Elsewhere the opener plugin does
+    // it without going near a shell.
+    #[cfg(not(windows))]
     {
         let dir = if target.is_file() {
             target.parent().unwrap_or(&target).to_path_buf()
         } else {
             target.clone()
         };
-        Command::new("xdg-open").arg(dir).spawn().map_err(|e| e.to_string())?;
-        Ok(())
+        opener::open_path(dir.to_string_lossy().to_string(), None::<&str>)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -213,18 +212,16 @@ fn open_in_fl(fl_executable: Option<String>, flp: String) -> Result<(), String> 
         return Ok(());
     }
 
-    #[cfg(windows)]
-    {
-        let mut command = Command::new("cmd");
-        command.args(["/C", "start", "", &flp]);
-        command.creation_flags(CREATE_NO_WINDOW);
-        command.spawn().map_err(|e| e.to_string())?;
-        Ok(())
-    }
-    #[cfg(not(windows))]
-    {
-        Err("Set your FL Studio path in Settings to open projects.".to_string())
-    }
+    // No FL path configured: hand the file to the shell's registered handler.
+    //
+    // This used to be `cmd /C start "" <path>`, which runs a command
+    // interpreter and passes a path the user chose as part of its command
+    // line — the one shell invocation left in the app, and exactly the shape
+    // HARDENING P0.5 rules out. tauri-plugin-opener calls ShellExecute
+    // directly: no interpreter, the path stays an argument rather than
+    // becoming syntax.
+    opener::open_path(project.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| format!("Could not open {flp}: {e}"))
 }
 
 /// Read a render back for the in-app preview player.

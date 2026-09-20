@@ -208,9 +208,19 @@ export function SettingsView({
               ["Python", env.python],
               ["PyFLP", `${env.pyflp}${env.compatShim ? " · compatibility shim active" : ""}`],
               ["FL Studio", <span className="mono" key="f">{env.flExecutable ?? env.flDiscovery}</span>],
+              ...(env.flArchitecture ? ([["Architecture", env.flArchitecture]] as [string, React.ReactNode][]) : []),
               ["Rendering", env.canRender ? "available" : env.renderReason],
               ["Stems", env.stemStrategy ?? env.stemReason],
               ["Workspace", <span className="mono" key="w">{env.workspace}</span>],
+              ["Library index", env.database],
+              [
+                "Build",
+                <span className="mono" key="b">
+                  {env.build.frozen
+                    ? `${env.build.prosodyVersion ?? "?"} · ${(env.build.gitCommit ?? "").slice(0, 7)} · ${env.build.builtAt ?? ""}`
+                    : "development"}
+                </span>,
+              ],
               // FL Studio encodes MP3 itself during a command-line render, so
               // nothing here calls ffmpeg. Saying "not found" without saying
               // "not needed" reads as a broken install on a fresh machine.

@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 from prosody_core.model.schemas import HealthStatus, LibraryEntry
 
@@ -60,14 +61,75 @@ def connect(path: Path) -> Iterator[sqlite3.Connection]:
     connection.row_factory = sqlite3.Row
     try:
         connection.execute("PRAGMA foreign_keys = ON")
+        # A build that is interrupted — the machine sleeps, FL wedges, the
+        # user kills Prosody — must not leave a half-written page in the
+        # index. WAL keeps readers working during a write and recovers
+        # cleanly from a crash (HARDENING P0.2).
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
         yield connection
         connection.commit()
     finally:
         connection.close()
 
 
+class IntegrityResult(NamedTuple):
+    ok: bool
+    #: Where a corrupt file was moved, when one was.
+    quarantined: Path | None
+    detail: str
+
+
+def check_integrity(path: Path) -> IntegrityResult:
+    """Verify the index, and set a corrupt one aside rather than failing.
+
+    The index is an index: every row can be rebuilt by rescanning the export
+    folder, so a corrupt database is an inconvenience and never a data loss.
+    Refusing to start would turn it into one, so a database that cannot be
+    read is renamed out of the way and a new one takes its place.
+    """
+    if not Path(path).is_file():
+        return IntegrityResult(True, None, "no database yet")
+
+    try:
+        connection = sqlite3.connect(str(path))
+        try:
+            # quick_check catches the corruption users actually hit at a
+            # fraction of integrity_check's cost on a large file.
+            row = connection.execute("PRAGMA quick_check").fetchone()
+            verdict = row[0] if row else "unknown"
+        finally:
+            connection.close()
+    except sqlite3.DatabaseError as exc:
+        verdict = f"unreadable: {exc}"
+
+    if verdict == "ok":
+        return IntegrityResult(True, None, "ok")
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    quarantine = Path(path).with_name(f"{Path(path).name}.corrupt-{stamp}")
+    try:
+        Path(path).replace(quarantine)
+        # WAL and shared-memory siblings belong to the old database; leaving
+        # them behind would corrupt the replacement too.
+        for suffix in ("-wal", "-shm"):
+            sibling = Path(str(path) + suffix)
+            if sibling.exists():
+                sibling.replace(Path(str(quarantine) + suffix))
+    except OSError as exc:
+        return IntegrityResult(False, None, f"{verdict}; it could not be moved aside: {exc}")
+
+    return IntegrityResult(False, quarantine, verdict)
+
+
 def migrate(path: Path) -> int:
-    """Apply pending migrations. Returns the resulting schema version."""
+    """Apply pending migrations. Returns the resulting schema version.
+
+    A corrupt database is set aside here rather than raising, so no caller has
+    to decide what to do about one. Every entry point goes through migrate, so
+    this is the single place that guarantee can live (HARDENING P0.2).
+    """
+    check_integrity(path)
     with connect(path) as db:
         db.execute(
             "CREATE TABLE IF NOT EXISTS schema_version ("

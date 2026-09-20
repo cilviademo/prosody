@@ -196,6 +196,8 @@ def available_strategy(
 ) -> tuple[StemStrategy | None, str]:
     """The strongest strategy that can run here, and why if none can."""
     env = env or describe()
+    if env.safe_mode:
+        return None, "Safe Mode is on, so no stem export runs"
     reasons: list[str] = []
     for strategy in STRATEGIES:
         ok, reason = strategy.available(env)

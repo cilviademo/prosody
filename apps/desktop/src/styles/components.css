@@ -520,3 +520,19 @@ pre.data {
 .empty { padding: var(--s11) var(--s4); text-align: center; }
 .empty .t { font-size: var(--fs-heading); font-weight: 400; color: var(--text-secondary); }
 .empty .d { font-size: var(--fs-small); color: var(--text-faint); margin-top: var(--s2); }
+
+/* Safe Mode banner. Loud enough that nobody wonders why Build does nothing,
+   quiet enough that it is not an error — Safe Mode is a choice, not a fault. */
+.safe-mode {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.safe-mode strong {
+  color: var(--text);
+  font-weight: 600;
+}

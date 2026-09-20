@@ -110,3 +110,45 @@ fn home() -> PathBuf {
     }
     std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("."))
 }
+
+/// Whether this session may only look, never touch (HARDENING P0.2).
+///
+/// Three ways in, because the situation it exists for is "the app will not
+/// start and I cannot use it to change a setting":
+///
+///   * `--safe` on the command line, for anyone comfortable with a shortcut
+///   * a `safemode.flag` file beside the executable, which needs no terminal
+///   * Shift held at launch, which needs nothing at all
+///
+/// The answer is computed once and handed to the core in its environment, so
+/// the whole process tree agrees.
+pub fn safe_mode_requested() -> bool {
+    if std::env::args().any(|a| a == "--safe" || a == "/safe") {
+        return true;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            if dir.join("safemode.flag").exists() {
+                return true;
+            }
+        }
+    }
+    shift_held()
+}
+
+#[cfg(windows)]
+fn shift_held() -> bool {
+    // GetAsyncKeyState's high bit is "down right now". Reading it this early
+    // catches a Shift held through the splash, which is when a user who has
+    // just had a failed launch would be holding it.
+    const VK_SHIFT: i32 = 0x10;
+    unsafe extern "system" {
+        fn GetAsyncKeyState(key: i32) -> i16;
+    }
+    unsafe { (GetAsyncKeyState(VK_SHIFT) as u16 & 0x8000) != 0 }
+}
+
+#[cfg(not(windows))]
+fn shift_held() -> bool {
+    false
+}

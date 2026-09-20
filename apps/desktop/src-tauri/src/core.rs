@@ -58,6 +58,16 @@ impl Core {
     pub fn start(paths: &Paths, resource_dir: Option<PathBuf>) -> Result<Self, String> {
         let launch = Launch::resolve(resource_dir)?;
 
+        // Refuse a binary this machine cannot load, and say why. Without this
+        // a staging mistake surfaces as "%1 is not a valid Win32 application",
+        // which names neither the file nor the cause. Only the frozen core is
+        // checked: the development path runs an interpreter the developer
+        // chose, and PE headers are a Windows concept.
+        #[cfg(windows)]
+        if launch.args.is_empty() {
+            crate::pe::check_runnable(&launch.program, "The Prosody core")?;
+        }
+
         let mut command = Command::new(&launch.program);
         command
             .args(&launch.args)
@@ -66,8 +76,16 @@ impl Core {
             .stderr(Stdio::piped())
             .env("PYTHONUNBUFFERED", "1")
             .env("PYTHONIOENCODING", "utf-8")
+            // Without this, a Python built before 3.15 uses the machine's ANSI
+            // code page for filesystem paths, and a project under a name with
+            // any non-Latin-1 character becomes unopenable. HARDENING P0.1.
+            .env("PYTHONUTF8", "1")
             .env("PROSODY_HOME", &paths.documents)
-            .env("PROSODY_STATE", &paths.state);
+            .env("PROSODY_STATE", &paths.state)
+            .env(
+                "PROSODY_SAFE_MODE",
+                if crate::paths::safe_mode_requested() { "1" } else { "0" },
+            );
         if let Some(dir) = &launch.working_dir {
             command.current_dir(dir);
         }
@@ -220,33 +238,39 @@ impl Launch {
             });
         }
 
-        // Development: run the package straight from the repository.
-        let root = repo_root().ok_or_else(|| {
-            let searched = tried
-                .iter()
-                .map(|p| format!("  {}", p.display()))
-                .collect::<Vec<_>>()
-                .join("\n");
-            format!(
-                "Could not find the Prosody core.\n\nA packaged build ships it \
-                 under resources/prosody-core; a development build runs it from \
-                 the repository. Looked in:\n{searched}\n\nSet PROSODY_CORE_EXE \
-                 to the executable to override this search."
-            )
-        })?;
-        let python = interpreter(&root).ok_or_else(|| {
-            format!(
-                "Python 3 was not found. Install Python 3.10 or newer, or set \
-                 PROSODY_PYTHON to its path. Looked beside {}.",
-                root.display()
-            )
-        })?;
-        Ok(Launch {
-            program: python,
-            args: vec!["-m".into(), "prosody_core".into()],
-            working_dir: Some(root),
-            bin_dir: None,
-        })
+        let searched = tried
+            .iter()
+            .map(|p| format!("  {}", p.display()))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // A release must never reach for a Python on the user's machine. The
+        // run-from-source path exists only in a development build, so the
+        // PATH lookup below is not merely unused in a release — it is not
+        // compiled into one. HARDENING P0.1: the only processes a shipped
+        // Prosody may start are its own bundled core, the configured FL64.exe
+        // and the shell's file-opener.
+        #[cfg(debug_assertions)]
+        {
+            if let Some(root) = repo_root() {
+                if let Some(python) = interpreter(&root) {
+                    return Ok(Launch {
+                        program: python,
+                        args: vec!["-m".into(), "prosody_core".into()],
+                        working_dir: Some(root),
+                        bin_dir: None,
+                    });
+                }
+            }
+        }
+
+        Err(format!(
+            "Could not find the Prosody core.\n\nIt ships under \
+             resources/prosody-core, beside Prosody.exe. If you moved or \
+             extracted only part of the folder, extract it again and keep it \
+             together. Looked in:\n{searched}\n\nSet PROSODY_CORE_EXE to the \
+             executable to override this search."
+        ))
     }
 }
 
@@ -348,6 +372,7 @@ fn search_for(root: &Path, name: &str, depth: usize) -> Option<PathBuf> {
 }
 
 /// Walk upwards for the checkout that holds `prosody_core/__main__.py`.
+#[cfg(debug_assertions)]
 fn repo_root() -> Option<PathBuf> {
     let mut fallback: Option<PathBuf> = None;
     for start in [std::env::current_exe().ok(), std::env::current_dir().ok()]
@@ -370,6 +395,7 @@ fn repo_root() -> Option<PathBuf> {
     fallback
 }
 
+#[cfg(debug_assertions)]
 fn interpreter(root: &Path) -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(explicit) = std::env::var("PROSODY_PYTHON") {

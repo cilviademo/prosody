@@ -66,6 +66,41 @@ jobs:
           Write-Host $reply
           if ($reply -notmatch '"ok":\s*true') { throw "core did not answer ping" }
 
+      # Records what produced this build, and the core's hash so the core can
+      # re-verify itself at startup (HARDENING P0.1).
+      - name: Write the build manifest
+        run: python scripts/build_info.py dist/prosody-core
+
+      # A Linux binary staged into a Windows release is the packaging mistake
+      # that produces "%1 is not a valid Win32 application" on a user's
+      # machine. Refuse to ship one.
+      - name: Verify every bundled binary is a Windows x64 program
+        shell: pwsh
+        run: |
+          $bad = @()
+          Get-ChildItem dist\prosody-core -Recurse -Include *.exe,*.dll | ForEach-Object {
+            $fs = [System.IO.File]::OpenRead($_.FullName)
+            try {
+              $head = New-Object byte[] 2
+              $null = $fs.Read($head, 0, 2)
+              if ([System.Text.Encoding]::ASCII.GetString($head) -ne "MZ") {
+                $bad += "$($_.Name): not a PE file"; return
+              }
+              $fs.Position = 0x3C
+              $off = New-Object byte[] 4
+              $null = $fs.Read($off, 0, 4)
+              $fs.Position = [BitConverter]::ToUInt32($off, 0) + 4
+              $m = New-Object byte[] 2
+              $null = $fs.Read($m, 0, 2)
+              $machine = [BitConverter]::ToUInt16($m, 0)
+              if ($machine -ne 0x8664) {
+                $bad += ("{0}: machine 0x{1:X4}, expected 0x8664" -f $_.Name, $machine)
+              }
+            } finally { $fs.Dispose() }
+          }
+          if ($bad.Count) { $bad | ForEach-Object { Write-Host $_ }; throw "non-x64 binaries in the bundle" }
+          Write-Host "all bundled binaries are Windows x64"
+
       - name: Stage the core as a Tauri resource
         shell: pwsh
         run: |
