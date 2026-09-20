@@ -40,8 +40,15 @@ Verified by running it here, on Linux, against synthetic projects.
   checking a path exists.
 - **Settings take effect** — FL path and Rendering toggle are read by the
   environment resolver.
-- **526 unit tests, ruff clean, tsc clean, zero Rust warnings** — verified in a
+- **530 unit tests, ruff clean, tsc clean, zero Rust warnings** — verified in a
   clean virtualenv, not just the development one.
+- **The one-line installer** (`scripts/install.ps1`) resolves the newest
+  release that carries a Windows ZIP, verifies its SHA-256 against the
+  published `SHA256SUMS.txt`, installs to `%LOCALAPPDATA%\Programs\Prosody`,
+  clears the mark-of-the-web and adds a Start Menu entry. Both halves were
+  exercised here: the release lookup against the live GitHub API, and the
+  install from a ZIP of the real release shape. Four tests guard that the URL
+  in README.md resolves to a script in the tree, on a branch that is built.
 - **CI runs on every push** (`.github/workflows/ci.yml`) and already earned its
   keep: the first run failed because `mido` was declared as an optional extra
   while every build imports it, so a fresh install had no MIDI export. Fixed,
@@ -54,18 +61,13 @@ Verified by running it here, on Linux, against synthetic projects.
   all written; the spec is proven on Linux. The Windows path has never
   executed. **Expect the first tag build to need one fix** — a missing DLL or a
   resource path is the usual shape.
-- **The release has not been built.** This session's credentials can push the
-  working branch but are refused (HTTP 403) on tag refs, and the GitHub
-  integration lacks `actions: write` to dispatch a run. The workflow is
-  committed and registered, and `claude/flstudio-utility-architecture-haaha9`
-  is the repository's default branch, so either of these produces the
-  artefacts:
-
-  * **Actions → release → Run workflow** (no tag needed), or
-  * `git tag v0.1.0 && git push origin v0.1.0`
-
-  The `ci` workflow does run automatically on every push and is green on the
-  current head.
+- **The release is built by a push to `main`.** This session's credentials are
+  refused (HTTP 403) on tag refs and the GitHub integration lacks
+  `actions: write` to dispatch a run, but ordinary branch pushes do trigger
+  workflows — `ci` has run on all of them. So `release.yml` now also triggers
+  on a push to `main`, and creating that branch starts the Windows build
+  without a tag or a dispatch. Tags and **Actions → release → Run workflow**
+  still work and still pin a named version.
 - **WebView2 detection** reads the Edge Update registry keys under HKLM and
   HKCU. The logic compiles and is Windows-only, so it has not been exercised.
 - **Window geometry** is saved on resize; it is not yet restored on launch or

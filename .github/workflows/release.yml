@@ -1,9 +1,14 @@
 # Builds the Prosody Windows release.
 #
 # Windows binaries need Windows, so this is the path that produces the ZIP and
-# the installer regardless of what the developer's machine runs. Push a tag:
+# the installer regardless of what the developer's machine runs.
 #
-#     git tag v0.1.0 && git push origin v0.1.0
+# Three ways to start it:
+#
+#   - push to main            the release for the current version is rebuilt
+#                             and replaced, so main always has a download
+#   - git push origin v0.1.0  a tag pins that version's release
+#   - Actions -> release -> Run workflow
 #
 # The artefacts appear on the Releases page a few minutes later. The job takes
 # no secrets beyond the automatic GITHUB_TOKEN; if it ever needs one, that is
@@ -13,12 +18,15 @@ name: release
 
 on:
   push:
+    branches: ["main"]
     tags: ["v*"]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to build (defaults to tauri.conf.json)"
-        required: false
+
+# Only one release build at a time; a newer push supersedes an older one
+# rather than racing it to the same tag.
+concurrency:
+  group: release
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -146,10 +154,27 @@ jobs:
           path: release/*
           if-no-files-found: error
 
+      # A tag names its own release. A push to main refreshes the release for
+      # whatever version tauri.conf.json currently declares, so the download
+      # link in the README never goes stale.
+      - name: Decide the release tag
+        id: tag
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like "refs/tags/*") {
+            $tag = $env:GITHUB_REF_NAME
+          } else {
+            $conf = Get-Content "apps\desktop\src-tauri\tauri.conf.json" -Raw | ConvertFrom-Json
+            $tag = "v$($conf.version)"
+          }
+          Write-Host "release tag: $tag"
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
       - name: Attach to the GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Prosody ${{ steps.tag.outputs.tag }}
           files: release/*
           body_path: RELEASE_NOTES.md
           draft: false

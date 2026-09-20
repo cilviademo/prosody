@@ -224,3 +224,55 @@ def test_pinned_requirements_cover_the_required_dependencies():
     }
     missing = _declared_dependencies() - pinned
     assert not missing, f"not pinned in requirements.txt: {sorted(missing)}"
+
+
+# --- the documented install path ------------------------------------------
+# README.md tells a user to pipe a URL into PowerShell. If that URL is wrong
+# the first thing anyone does with this project fails, and nothing else in the
+# suite would notice.
+
+INSTALL_URL = re.compile(
+    r"https://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(\S+?\.ps1)"
+)
+
+
+def test_the_one_line_installer_points_at_a_script_that_exists():
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    matches = INSTALL_URL.findall(readme)
+    assert matches, "README.md no longer documents a one-line installer"
+    for _owner, _repo, ref, path in matches:
+        assert (REPO / path).is_file(), f"{path} is advertised in README.md but not in the tree"
+        # The URL is only fetchable if that branch is one we actually publish.
+        assert ref == "main", f"the installer URL points at '{ref}', which is not the published branch"
+
+
+def test_the_installer_downloads_from_the_repository_it_ships_in():
+    """A forked or renamed repo with a stale URL would install someone else's build."""
+    script = (REPO / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    declared = re.search(r'^\$Repo\s*=\s*"([^"]+)"', script, re.MULTILINE)
+    assert declared, "install.ps1 no longer declares which repository it installs from"
+    owner, repo, _ref, _path = INSTALL_URL.findall(readme)[0]
+    assert declared.group(1) == f"{owner}/{repo}"
+
+
+def test_the_installer_never_weakens_tls_or_certificate_checking():
+    """It runs as a pipe into iex on someone else's machine; it must not opt out."""
+    script = (REPO / "scripts" / "install.ps1").read_text(encoding="utf-8")
+    for forbidden in (
+        "ServerCertificateValidationCallback",
+        "-SkipCertificateCheck",
+        "Ssl3",
+        "Tls11",
+    ):
+        assert forbidden not in script, f"install.ps1 weakens transport security: {forbidden}"
+    assert "Tls12" in script, "install.ps1 must force TLS 1.2 for Windows PowerShell 5.1"
+
+
+def test_the_release_workflow_builds_from_the_published_branch():
+    """README promises main always has a download; the trigger must back that up."""
+    workflow = (REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert re.search(r'branches:\s*\["?main"?\]', workflow), (
+        "release.yml does not build on a push to main, so the one-line "
+        "installer can point at a branch with no release behind it"
+    )

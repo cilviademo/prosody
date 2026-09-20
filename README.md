@@ -45,7 +45,29 @@ before it writes a byte.
 Python, Node and Rust are not needed to run it. FL Studio is optional — only
 audio and stems need it.
 
-### Download a release
+### One line (recommended)
+
+Open PowerShell — the one already on your PC, no admin — and paste:
+
+```powershell
+irm https://raw.githubusercontent.com/cilviademo/prosody/main/scripts/install.ps1 | iex
+```
+
+That downloads the latest release, checks its SHA-256 against the published
+`SHA256SUMS.txt`, installs to `%LOCALAPPDATA%\Programs\Prosody`, clears the
+mark-of-the-web so SmartScreen stays quiet, adds a Start Menu entry and starts
+the app. Re-run it any time to update; it replaces the old copy in place.
+
+Options, if you clone the repository first:
+
+```powershell
+.\scripts\install.ps1 -Portable              # keep all state beside the exe
+.\scripts\install.ps1 -NoLaunch              # install without starting
+.\scripts\install.ps1 -Destination D:\Audio\Prosody
+.\scripts\install.ps1 -ZipPath .\Prosody-v0.1.0-Windows.zip   # offline
+```
+
+### Or download by hand
 
 Grab `Prosody-v0.1.0-Windows.zip` (portable) or `Prosody-v0.1.0-Setup.exe`
 (installer) from the repository's **Releases** page, in a browser. No account,
@@ -55,7 +77,8 @@ Extract the ZIP anywhere you can write to and double-click `Prosody.exe`. Keep
 the folder together — the executable needs `resources/` beside it.
 
 On first launch Windows SmartScreen says **"Windows protected your PC"**
-because the builds are unsigned. Click **More info** → **Run anyway**.
+because the builds are unsigned. Click **More info** → **Run anyway**. The
+one-line installer above avoids this by clearing the download marker for you.
 
 Put an empty file named `portable.flag` next to `Prosody.exe` to keep
 everything in a `Data` folder beside the executable instead of your user
@@ -63,15 +86,17 @@ profile.
 
 ### Build a release yourself
 
-Releases are produced by CI so they do not depend on one machine. Push a tag:
+Releases are produced by CI so they do not depend on one machine. Any of:
 
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
+- **push to `main`** — the release for the version in `tauri.conf.json` is
+  rebuilt and replaced, so the one-line installer always finds a current build
+- **push a tag** — `git tag v0.1.0 && git push origin v0.1.0` pins that version
+- **Actions → release → Run workflow**
 
 The `windows-latest` job in `.github/workflows/release.yml` builds the core,
 the app and the installer, smoke-tests the extracted ZIP, and attaches
-everything to the GitHub Release.
+everything to the GitHub Release. It takes about ten minutes and needs no
+secrets.
 
 To build on a Windows machine instead:
 
@@ -79,7 +104,8 @@ To build on a Windows machine instead:
 .\scripts\build-release.ps1
 ```
 
-It prints the exact path of `Prosody.exe`, the ZIP and the installer.
+It prints the exact path of `Prosody.exe`, the ZIP and the installer. Needs
+Python 3.10+, Node 18+ and Rust on `PATH`.
 
 ### Run from source (development)
 

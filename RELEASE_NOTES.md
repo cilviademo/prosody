@@ -8,6 +8,17 @@ modifying your original.
 
 ## Getting it running
 
+**One line.** Open PowerShell — the one already on your PC, no admin — and
+paste:
+
+```powershell
+irm https://raw.githubusercontent.com/cilviademo/prosody/main/scripts/install.ps1 | iex
+```
+
+It downloads this release, checks its SHA-256 against `SHA256SUMS.txt` below,
+installs it, clears the download marker so SmartScreen stays quiet, adds a
+Start Menu entry and starts the app. Re-run it later to update.
+
 **Portable:** extract `Prosody-v0.1.0-Windows.zip` anywhere you can write to
 and double-click `Prosody.exe`. Keep the folder together.
 
