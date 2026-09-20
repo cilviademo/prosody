@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type {
-  BackendStatus, BuildOutcome, Env, Genre, LibraryItem, ProgressEvent, Project,
-  Settings,
+  BackendStatus, BuildOutcome, Env, Genre, InterruptedJob, LibraryItem,
+  ProgressEvent, Project, Settings,
 } from "./lib/types";
 import { api, backendStatus, onProgress, saveWindow, shell } from "./lib/api";
 import { Home } from "./views/Home";
@@ -12,7 +12,7 @@ import { Progress, Result } from "./views/BuildView";
 import { Library } from "./views/Library";
 import { SettingsView } from "./views/Settings";
 import { Diagnostics } from "./views/Diagnostics";
-import { Note } from "./components/ui";
+import { Button, Note } from "./components/ui";
 
 /**
  * The Prosody mark: three strokes of unequal height — a stress pattern.
@@ -43,6 +43,10 @@ export default function App() {
   const [genres, setGenres] = useState<Genre[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
+  // Builds that never reported finishing. Surfaced once at startup rather than
+  // cleaned up silently: the folder may hold the only copy of something the
+  // user wants (HARDENING P0.4).
+  const [interrupted, setInterrupted] = useState<InterruptedJob[]>([]);
 
   const [project, setProject] = useState<Project | null>(null);
   const [mode, setMode] = useState<"extract" | "arrange" | "both">("both");
@@ -153,6 +157,14 @@ export default function App() {
       .catch((e) => setError(String((e as Error).message ?? e)))
       .finally(() => setOpening(false));
   }, [refreshLibrary]);
+
+  // Look for interrupted builds once, at startup.
+  useEffect(() => {
+    void api
+      .interrupted()
+      .then((found) => setInterrupted(found.interrupted))
+      .catch(() => setInterrupted([]));
+  }, []);
 
   // -- native file drop ---------------------------------------------------- //
   useEffect(() => {
@@ -284,6 +296,33 @@ export default function App() {
           {env?.canRender ? "FL Studio ready" : "FL Studio not configured"}
         </button>
       </header>
+
+      {interrupted.length > 0 && (
+        <div className="interrupted" role="status">
+          <strong>
+            {interrupted.length === 1
+              ? "A build did not finish."
+              : `${interrupted.length} builds did not finish.`}
+          </strong>{" "}
+          {interrupted[0].name} stopped at “{interrupted[0].lastStage}”. Your
+          original project was not touched. The folder is kept so you can look
+          at what it did produce.
+          <div className="row" style={{ marginTop: "var(--s4)" }}>
+            <Button onClick={() => void shell.reveal(interrupted[0].outDir)}>
+              Open folder
+            </Button>
+            <Button
+              onClick={async () => {
+                await api.discardJob(interrupted[0].outDir);
+                setInterrupted((await api.interrupted()).interrupted);
+              }}
+            >
+              Discard it
+            </Button>
+            <Button onClick={() => setInterrupted([])}>Dismiss</Button>
+          </div>
+        </div>
+      )}
 
       {env?.safeMode && (
         <div className="safe-mode" role="status">

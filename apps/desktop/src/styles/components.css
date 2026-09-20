@@ -576,3 +576,16 @@ pre.data {
   padding-left: 8px;
   font-weight: 600;
 }
+
+/* An interrupted build. Same weight as the Safe Mode notice: informational,
+   not an error — the user's original is untouched either way. */
+.interrupted {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.interrupted strong { color: var(--text); font-weight: 600; }

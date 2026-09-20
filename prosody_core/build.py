@@ -29,6 +29,7 @@ from prosody_core.extract.package import package_project
 from prosody_core.fs.safety import sha256_file, slugify, versioned_path
 from prosody_core.fs.source import SourceChanged, working_copy
 from prosody_core.health.check import check_project, classify_state, human_status
+from prosody_core.jobs import JobManifest
 from prosody_core.model.schemas import (
     Analysis,
     ArrangementPlan,
@@ -76,6 +77,9 @@ class _Recorder:
     progress: ProgressFn | None = None
     stages: list[StageResult] = field(default_factory=list)
     artifacts: list[Artifact] = field(default_factory=list)
+    #: Set once the output folder exists, so an interrupted build is
+    #: self-describing (HARDENING P0.4).
+    manifest: JobManifest | None = None
 
     def begin(self, name: str, detail: str = "") -> None:
         if self.progress:
@@ -89,6 +93,8 @@ class _Recorder:
             StageResult(name=name, status=status, detail=detail, artifacts=artifacts)
         )
         self.artifacts.extend(artifacts)
+        if self.manifest is not None:
+            self.manifest.stage(name, status.value, detail)
         if self.progress:
             self.progress(name, status.value, detail)
 
@@ -189,6 +195,22 @@ def build(
     for sub in ("preview", "stems", "midi", "data", "reports"):
         (out_dir / sub).mkdir(parents=True, exist_ok=True)
 
+    recorder.manifest = JobManifest(
+        out_dir=out_dir,
+        source_path=str(source),
+        source_hash=source_hash,
+        operation="arrange" if options.arrange else "extract",
+        options={
+            "genre": options.genre, "structure": options.structure,
+            "level": int(options.level), "variant": options.variant,
+            "wav": options.want_wav, "mp3": options.want_mp3,
+            "midi": options.want_midi, "zip": options.want_zip,
+            "stems": options.want_stems,
+        },
+        working_copy=str(working),
+    )
+    recorder.manifest.write()
+
     _dump(out_dir / "data" / "project.json", project)
     _dump(out_dir / "data" / "analysis.json", analysis)
     _dump(out_dir / "reports" / "health.json", health)
@@ -202,6 +224,7 @@ def build(
     plan: ArrangementPlan | None = None
     tier = OutputTier.NONE
     flp_path: Path | None = None
+    validation_level: str | None = None
 
     # -- arrange ----------------------------------------------------------- #
     if options.arrange:
@@ -240,6 +263,7 @@ def build(
                     source_hash=source_hash,
                 )
                 _dump(out_dir / "reports" / "validation.json", result)
+                validation_level = result.level.value
                 (out_dir / "reports" / "operations.log").write_text(
                     "\n".join(report.operations) + "\n", encoding="utf-8"
                 )
@@ -480,6 +504,15 @@ def build(
         message=message,
     )
     _dump(out_dir / "reports" / "build.json", result)
+
+    # Mark the manifest finished last. Anything that stops the build before
+    # this line leaves it unfinished, which is exactly what the startup sweep
+    # looks for (HARDENING P0.4).
+    if recorder.manifest is not None:
+        recorder.manifest.outputs = [
+            {"path": str(a.path), "kind": a.kind.value} for a in recorder.artifacts
+        ]
+        recorder.manifest.finish(validation_level)
     return result
 
 

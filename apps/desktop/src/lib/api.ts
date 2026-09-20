@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
   BackendStatus, BuildOutcome, Env, Genre, LibraryItem, Plan, ProgressEvent,
-  Project, Settings, SystemCheck,
+  InterruptedJob, Project, Settings, SystemCheck,
 } from "./types";
 
 export class BackendError extends Error {
@@ -57,6 +57,10 @@ export const api = {
   library: () => call<{ projects: LibraryItem[] }>("library.list").then((r) => r.projects),
   forget: (id: string) => call<{ removed: string }>("library.forget", { id }),
   systemCheck: () => call<SystemCheck>("system.check"),
+  interrupted: () =>
+    call<{ interrupted: InterruptedJob[]; count: number }>("jobs.interrupted"),
+  discardJob: (outDir: string) =>
+    call<{ discarded: string }>("jobs.discard", { outDir }),
   rebuildLibrary: () =>
     call<{ recovered: number; projects: number; skipped: string[] }>("library.rebuild"),
   testFl: (path?: string) =>

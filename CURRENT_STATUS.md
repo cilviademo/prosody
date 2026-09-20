@@ -54,6 +54,15 @@ conditions as passed.
 
 ## NOT DONE from HARDENING, with reasons
 
+- **Resume-from-stage for an interrupted build (P0.4).** The manifest and the
+  startup sweep are done: an interrupted export folder records its source, its
+  hash, the options, every stage with a timestamp, and how far it got, and
+  Prosody surfaces it on launch with Open folder / Discard / Dismiss. What is
+  not implemented is re-entering a build at the stage it stopped at. Every
+  stage is deterministic given the same source, so re-running is correct and
+  only costs time — which makes Restart the same action as Resume, and a
+  separate Resume button would be a false distinction. Stage-level re-entry is
+  worth building when renders are long enough for it to matter.
 - **P1.2 independent parser (flpdiff).** Not bundled. Its licence has not been
   verified from its own LICENSE file, and shipping a JavaScript parser needs
   either the webview or a second sidecar. `SEMANTICALLY_VALIDATED` is therefore

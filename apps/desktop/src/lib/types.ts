@@ -161,3 +161,14 @@ export interface SystemCheck {
   ok: boolean;
   report: string;
 }
+
+export interface InterruptedJob {
+  outDir: string;
+  name: string;
+  sourcePath: string;
+  sourceExists: boolean;
+  startedAt: string;
+  lastStage: string;
+  stageCount: number;
+  partials: string[];
+}

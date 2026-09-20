@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from prosody_core import build as build_module
-from prosody_core import buildinfo
+from prosody_core import buildinfo, jobs
 from prosody_core.ai.planner import PROVIDERS, PlanRequest, get_planner
 from prosody_core.arrange import profiles
 from prosody_core.arrange.planner import PlanningError, pattern_roles
@@ -534,6 +534,29 @@ def h_library(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     }
 
 
+def h_jobs_interrupted(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Export folders whose build never finished (HARDENING P0.4).
+
+    Offered rather than cleaned up: a half-built folder may hold the only copy
+    of something the user wants.
+    """
+    found = jobs.scan(workspace.export_root())
+    return {"interrupted": [i.as_dict() for i in found], "count": len(found)}
+
+
+def h_jobs_discard(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Delete one interrupted export folder, by the user's explicit choice."""
+    out_dir = Path(payload["outDir"])
+    jobs.discard(out_dir, workspace.export_root())
+    return {"discarded": str(out_dir)}
+
+
+def h_jobs_clear_partials(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Remove stray .partial files, leaving every finished file alone."""
+    removed = jobs.clear_partials(workspace.export_root())
+    return {"removed": [str(p) for p in removed], "count": len(removed)}
+
+
 def h_system_check(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     """Every capability, its verdict and why (HARDENING P1.4)."""
     result = systemcheck.run(workspace)
@@ -658,6 +681,9 @@ HANDLERS: dict[str, Handler] = {
     "library.forget": h_library_forget,
     "library.rebuild": h_library_rebuild,
     "system.check": h_system_check,
+    "jobs.interrupted": h_jobs_interrupted,
+    "jobs.discard": h_jobs_discard,
+    "jobs.clearPartials": h_jobs_clear_partials,
     "project.verify": h_verify,
     "fl.test": h_test_fl,
 }
