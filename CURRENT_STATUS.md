@@ -4,9 +4,22 @@ Prosody v0.1.0 · 2026-09-20
 
 **This session ran on Linux in a container.** Windows binaries need Windows, so
 per RELEASE.md section 0 all code and configuration work happened here and the
-`windows-latest` GitHub Actions job produces the ZIP and installer. **The
-clean-machine acceptance test (RELEASE.md section 10) was not run** — it needs
-a Windows account and FL Studio. Nothing below claims otherwise.
+`windows-latest` GitHub Actions job produces the ZIP and installer.
+
+**The release now exists.** <https://github.com/cilviademo/prosody/releases/tag/v0.1.0>
+carries `Prosody-v0.1.0-Windows.zip` (20.1 MB) and
+`Prosody_0.1.0_x64-setup.exe` (17.5 MB), built by run 35538426564.
+
+**The clean-machine acceptance test (RELEASE.md section 10) was still not run**
+— it needs a Windows account and FL Studio, and no step below is marked
+WORKING on the strength of anything that was not actually executed. What was
+executed against the published artefacts, from here: the one-line installer
+resolved the release, downloaded the ZIP, verified its SHA-256 against the
+published `SHA256SUMS.txt` and installed the correct layout; `Prosody.exe` is
+a PE32+ GUI binary and `prosody-core.exe` a PE32+ console binary, which is the
+combination the stdio IPC needs; all six genre profiles and the
+connection-test asset are inside the bundle. Nobody has yet *launched* it on
+Windows.
 
 ---
 
@@ -47,8 +60,15 @@ Verified by running it here, on Linux, against synthetic projects.
   published `SHA256SUMS.txt`, installs to `%LOCALAPPDATA%\Programs\Prosody`,
   clears the mark-of-the-web and adds a Start Menu entry. Both halves were
   exercised here: the release lookup against the live GitHub API, and the
-  install from a ZIP of the real release shape. Four tests guard that the URL
-  in README.md resolves to a script in the tree, on a branch that is built.
+  install from a ZIP of the real release shape, and then against the published
+  v0.1.0 release itself, end to end. That last run found the bug that mattered:
+  checksum verification was silently skipping. GitHub serves release assets as
+  `application/octet-stream`, so `Invoke-WebRequest`'s `.Content` came back as
+  a `byte[]` rather than a string; splitting that into lines matched nothing
+  and the script said "no checksum recorded" and carried on. It now reads the
+  file from disk, and a missing entry is a visible warning rather than a grey
+  note. Four tests guard that the URL in README.md resolves to a script in the
+  tree, on a branch that is built.
 - **CI runs on every push** (`.github/workflows/ci.yml`) and already earned its
   keep: the first run failed because `mido` was declared as an optional extra
   while every build imports it, so a fresh install had no MIDI export. Fixed,

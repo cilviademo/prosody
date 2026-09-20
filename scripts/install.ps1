@@ -118,8 +118,15 @@ try {
 
     if ($sums) {
         Say "Verifying checksum..."
-        $sumsText = (Invoke-WebRequest -Uri $sums.browser_download_url -Headers $headers).Content
-        $line = ($sumsText -split "`r?`n") | Where-Object { $_ -match [regex]::Escape($asset.name) } | Select-Object -First 1
+        # Read it from a file rather than from .Content: GitHub serves release
+        # assets as application/octet-stream, and Invoke-WebRequest hands back
+        # a byte[] for that, not a string. Splitting a byte[] into lines
+        # matches nothing and silently skips the whole check.
+        $sumsFile = Join-Path $work "SHA256SUMS.txt"
+        Invoke-WebRequest -Uri $sums.browser_download_url -OutFile $sumsFile -Headers $headers
+        $line = Get-Content $sumsFile |
+            Where-Object { $_ -match ('\s' + [regex]::Escape($asset.name) + '\s*$') } |
+            Select-Object -First 1
         if ($line -and $line -match '^([0-9a-fA-F]{64})') {
             $expected = $Matches[1].ToUpperInvariant()
             $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToUpperInvariant()
@@ -128,7 +135,9 @@ try {
             }
             Note "SHA-256 matches"
         } else {
-            Note "no checksum recorded for this file; skipping verification"
+            # The release publishes checksums, so a missing entry is not a
+            # normal state — say so where it can be seen.
+            Write-Warning "$($asset.name) is not listed in SHA256SUMS.txt; the download could not be verified."
         }
     }
     } else {
