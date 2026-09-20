@@ -94,3 +94,64 @@ def test_no_secret_looking_literals_are_committed():
     pattern = re.compile(r"(sk-ant-|sk-proj-|AKIA[0-9A-Z]{16})")
     for path in python_files():
         assert not pattern.search(path.read_text(encoding="utf-8")), path
+
+
+# -- product naming --------------------------------------------------------- #
+
+REPO = PACKAGE.parent
+
+
+def test_the_package_never_says_asterism():
+    """The product is Prosody. A stray old name in a path or a filename would
+    reach the user's disk, not just the screen."""
+    for path in python_files():
+        assert "asterism" not in path.read_text(encoding="utf-8").lower(), path
+
+
+def test_the_desktop_app_never_says_asterism():
+    ui = REPO / "apps" / "desktop" / "src"
+    if not ui.is_dir():
+        return
+    for path in [*ui.rglob("*.tsx"), *ui.rglob("*.ts"), *ui.rglob("*.css")]:
+        assert "asterism" not in path.read_text(encoding="utf-8").lower(), path
+
+
+def test_generated_names_carry_the_product_tag():
+    from flpfinisher.build import APP_TAG, output_stem
+
+    assert APP_TAG == "PROSODY"
+    assert output_stem(Path("Starfall.flp"), "rnb", 1) == "Starfall__PROSODY_RNB_V001"
+
+
+def test_the_workspace_is_named_for_the_product():
+    from flpfinisher.workspace import APP_NAME, default_root
+
+    assert APP_NAME == "Prosody"
+    assert default_root().name == "Prosody"
+
+
+def test_the_interface_is_literally_monochrome():
+    """Every colour in the UI must be a true neutral (R == G == B).
+
+    A few points of blue in the channel is imperceptible as colour but it is
+    what makes a dark interface read as "dark blue" rather than black, which
+    is the thing this design system exists to avoid. Enforcing R==G==B means
+    no screen can reintroduce a cast by eye.
+    """
+    ui = REPO / "apps" / "desktop" / "src"
+    if not ui.is_dir():
+        return
+
+    offenders: list[str] = []
+    for path in [*ui.rglob("*.css"), *ui.rglob("*.tsx")]:
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"#([0-9A-Fa-f]{6})\b", text):
+            r, g, b = (int(match.group(1)[i:i + 2], 16) for i in (0, 2, 4))
+            if not r == g == b:
+                offenders.append(f"{path.name}: #{match.group(1)}")
+        for match in re.finditer(r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", text):
+            r, g, b = (int(match.group(i)) for i in (1, 2, 3))
+            if not r == g == b:
+                offenders.append(f"{path.name}: rgb({r},{g},{b})")
+
+    assert not offenders, f"non-neutral colours: {sorted(set(offenders))}"

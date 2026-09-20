@@ -1,65 +1,66 @@
-import type { LibraryItem } from "../lib/types";
-import { Empty } from "../components/Primitives";
+import type { Genre, LibraryItem } from "../lib/types";
+import { Badge, Empty } from "../components/ui";
 import { bars, tempo, when } from "../lib/format";
 
-const TONE: Record<string, string> = {
-  Completed: "done", Warning: "warn",
-};
+const COLUMNS = "1fr 76px 92px 96px 110px";
 
 export function Library({
-  items, onOpen, onReveal,
+  items, genres, onOpen, onReveal,
 }: {
   items: LibraryItem[];
+  genres: Genre[];
   onOpen: (path: string) => void;
   onReveal: (dir: string) => void;
 }) {
+  // Library rows store the genre id; the picker's label is what people read.
+  const label = new Map(genres.map((g) => [g.id, g.label]));
   if (items.length === 0) {
     return (
-      <div className="page-inner wide fade">
-        <span className="eyebrow">Library</span>
-        <Empty title="No projects yet"
-               hint="Projects you open appear here with their tempo, key and status." />
+      <div className="view wide enter">
+        <div className="label">Library</div>
+        <Empty
+          title="No projects yet"
+          detail="Projects you open appear here with their tempo, key and status."
+        />
       </div>
     );
   }
 
   return (
-    <div className="page-inner wide fade">
-      <span className="eyebrow">Library</span>
-      <h2 style={{ marginTop: 10, fontWeight: 300, fontSize: 28 }}>
+    <div className="view wide enter">
+      <div className="label">Library</div>
+      <h1 className="title" style={{ marginTop: "var(--s3)" }}>
         {items.length} project{items.length === 1 ? "" : "s"}
-      </h2>
+      </h1>
 
-      <div className="lib-head" style={{ marginTop: 26 }}>
-        <span>Project</span><span>BPM</span><span>Key</span>
-        <span>Genre</span><span>Status</span>
-      </div>
+      <div style={{ marginTop: "var(--s8)" }}>
+        <div className="data-head" style={{ gridTemplateColumns: COLUMNS }}>
+          <span>Project</span><span>BPM</span><span>Key</span>
+          <span>Style</span><span>Status</span>
+        </div>
 
-      <div className="lib">
         {items.map((item) => (
           <button
             key={item.id}
-            className="lib-row"
+            className="data-row"
+            style={{ gridTemplateColumns: COLUMNS }}
             type="button"
+            title={item.exists ? item.path : "Source has moved"}
             onClick={() =>
-              item.exists
-                ? onOpen(item.path)
-                : item.outDir && onReveal(item.outDir)
+              item.exists ? onOpen(item.path) : item.outDir && onReveal(item.outDir)
             }
           >
-            <span>
-              <span className="nm">{item.name}</span>
-              <span className="sub">
+            <span className="grow" style={{ minWidth: 0 }}>
+              <span className="truncate" style={{ display: "block" }}>{item.name}</span>
+              <span className="mono faint" style={{ fontSize: "var(--fs-micro)" }}>
                 {bars(item.lengthBars)} bars · {when(item.updatedAt)}
-                {item.exists ? "" : " · source moved"}
+                {item.exists ? "" : " · moved"}
               </span>
             </span>
             <span className="c">{tempo(item.tempo)}</span>
             <span className="c">{item.key ?? "—"}</span>
-            <span className="c">{item.genre ?? "—"}</span>
-            <span>
-              <span className={`pill ${TONE[item.status] ?? ""}`}>{item.status}</span>
-            </span>
+            <span className="c">{item.genre ? label.get(item.genre) ?? item.genre : "—"}</span>
+            <span><Badge on={item.status === "Completed"}>{item.status}</Badge></span>
           </button>
         ))}
       </div>

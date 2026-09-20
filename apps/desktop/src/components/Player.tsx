@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { shell } from "../lib/api";
 import { clock } from "../lib/format";
+import { Note } from "./ui";
 
-/** Preview player for generated WAV/MP3. Loads bytes through the shell so it
- *  works regardless of where the user's export folder lives. */
-export function Player({ path, label }: { path: string; label?: string }) {
+/**
+ * Preview transport for a generated render.
+ *
+ * Audio is read through the shell rather than a file:// URL so it works
+ * wherever the user's export folder lives.
+ */
+export function Player({ path }: { path: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -14,7 +19,7 @@ export function Player({ path, label }: { path: string; label?: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let revoked: string | null = null;
+    let created: string | null = null;
     let cancelled = false;
     setError(null);
     setUrl(null);
@@ -24,15 +29,14 @@ export function Player({ path, label }: { path: string; label?: string }) {
       .then((data) => {
         if (cancelled) return;
         const type = path.toLowerCase().endsWith(".mp3") ? "audio/mpeg" : "audio/wav";
-        const blob = new Blob([new Uint8Array(data)], { type });
-        revoked = URL.createObjectURL(blob);
-        setUrl(revoked);
+        created = URL.createObjectURL(new Blob([new Uint8Array(data)], { type }));
+        setUrl(created);
       })
       .catch((e) => !cancelled && setError(String(e)));
 
     return () => {
       cancelled = true;
-      if (revoked) URL.revokeObjectURL(revoked);
+      if (created) URL.revokeObjectURL(created);
     };
   }, [path]);
 
@@ -43,23 +47,19 @@ export function Player({ path, label }: { path: string; label?: string }) {
   const toggle = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (playing) {
-      audio.pause();
-    } else {
-      void audio.play().catch((e) => setError(String(e)));
-    }
+    if (playing) audio.pause();
+    else void audio.play().catch((e) => setError(String(e)));
   };
 
-  if (error) {
-    return <div className="notice warn">Preview unavailable: {error}</div>;
-  }
+  if (error) return <Note heading="Preview unavailable">{error}</Note>;
 
   return (
     <div className="player">
-      <button className="play" onClick={toggle} disabled={!url} type="button"
+      <button className="transport" onClick={toggle} disabled={!url} type="button"
               aria-label={playing ? "Pause" : "Play"}>
         {playing ? "❚❚" : "▶"}
       </button>
+
       <input
         className="seek"
         type="range"
@@ -67,16 +67,17 @@ export function Player({ path, label }: { path: string; label?: string }) {
         max={duration || 0}
         step={0.05}
         value={time}
+        disabled={!duration}
+        aria-label="Seek"
         onChange={(e) => {
           const next = Number(e.target.value);
           setTime(next);
           if (audioRef.current) audioRef.current.currentTime = next;
         }}
-        disabled={!duration}
       />
-      <span className="time">
-        {clock(time)} / {clock(duration)}
-      </span>
+
+      <span className="time">{clock(time)} / {clock(duration)}</span>
+
       <input
         className="vol"
         type="range"
@@ -84,10 +85,10 @@ export function Player({ path, label }: { path: string; label?: string }) {
         max={1}
         step={0.01}
         value={volume}
-        onChange={(e) => setVolume(Number(e.target.value))}
         aria-label="Volume"
+        onChange={(e) => setVolume(Number(e.target.value))}
       />
-      {label && <span className="faint mono">{label}</span>}
+
       {url && (
         <audio
           ref={audioRef}

@@ -1,6 +1,6 @@
 # CURRENT_STATUS
 
-Asterism v0.1.0 · 2026-09-20
+Prosody v0.1.0 · 2026-09-20
 
 Verified on Linux with a synthetic four-bar project. **No real FL Studio
 project and no FL Studio installation has been exercised yet** — the studio PC
@@ -41,9 +41,23 @@ is where that happens.
   Connection, render toggle, export folder, formats, creativity, planner).
 - **Honest degradation everywhere.** Unavailable capabilities are disabled with
   the reason shown, and every other output still runs.
-- **466 unit tests, lint clean.** They parse real FLP binaries, not mocks.
+- **Monochrome UI system.** Tokens, primitives and per-screen styles in
+  `apps/desktop/src/styles` + `components/ui.tsx`; no accent hue anywhere.
+  Documented in [docs/design-system.md](docs/design-system.md).
+- **Settings actually take effect.** The FL Studio path and the Rendering
+  toggle are read by the environment resolver, not just saved. (They were
+  inert before the redesign pass; `FLPF_*` env flags still work for the CLI.)
+- **475 unit tests, lint clean.** They parse real FLP binaries, not mocks.
 
 ## PARTIAL
+
+- **Visual polish on secondary surfaces.** The six main screens were reviewed
+  and revised; the empty Library state, the fatal-startup screen and the
+  progress screen have had less time in front of a real eye — the progress
+  screen in particular finishes in under a second locally, so it has only been
+  reviewed as a component.
+- **Responsive behaviour** is checked at the 1180×820 default and down to the
+  940px minimum width. Nothing below that is designed for.
 
 - **Key detection** — pitch-class histogram correlation. Labelled "approx" in
   the UI below 0.70 confidence. Untested against real music.
@@ -93,7 +107,10 @@ is where that happens.
 5. **`state` thresholds** (≤8 bars = loop, <32 = partial) are guesses.
 6. **Nothing has been tested above six small files.** The scan loop is
    synchronous; the resumable queue is designed, not built.
-7. **The app needs Python 3.10+ on the machine.** It is not yet bundled as a
+7. **Section labels clip on very short sections.** A 4-bar `OUTRO` in an
+   80-bar song renders as `OUTR`; the full name is in the tooltip. Clipping
+   beats an ellipsis that would eat most of the word, but neither is ideal.
+8. **The app needs Python 3.10+ on the machine.** It is not yet bundled as a
    standalone runtime; the window shows a clear message with the fix if Python
    is missing.
 
@@ -101,7 +118,7 @@ is where that happens.
 
 **Run it on the studio PC against real projects.** In order:
 
-1. Point Asterism at a real four-bar `.flp` and confirm the derivative opens in
+1. Point Prosody at a real four-bar `.flp` and confirm the derivative opens in
    FL Studio with its plugins, samples and mixer intact. This is the one
    result that decides whether the product works.
 2. Set the FL Studio path, enable rendering, and run a build — confirming the

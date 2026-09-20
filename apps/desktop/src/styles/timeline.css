@@ -1,0 +1,133 @@
+/* Prosody — arrangement view.
+ *
+ * The core of the product, so it reads as an arranger panel rather than a
+ * chart: a ruled bar scale, outlined section blocks whose fill *lightness*
+ * encodes energy, and hairline lanes underneath. Entirely grayscale — the
+ * eye reads position and brightness, which is what an arranger needs.
+ */
+
+.arranger {
+  /* Lane labels sit in a fixed gutter so the ruler, the section strip and
+   * every lane share one x-axis - the whole panel reads as a single grid. */
+  --lane-label: 78px;
+  --gutter: calc(var(--lane-label) + var(--s4));
+
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s5);
+}
+
+/* -- ruler -------------------------------------------------------------- */
+
+.ruler {
+  display: flex;
+  height: 14px;
+  margin: 0 0 var(--s2) var(--gutter);
+  border-bottom: 1px solid var(--line);
+}
+.ruler .m {
+  position: relative;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  padding-left: 5px;
+}
+.ruler .m::before {
+  content: "";
+  position: absolute;
+  left: 0; bottom: -1px;
+  width: 1px; height: 5px;
+  background: var(--line-active);
+}
+
+/* -- sections ----------------------------------------------------------- */
+
+.sections { display: flex; gap: 2px; height: 48px; margin-left: var(--gutter); }
+.sect {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Tight padding so a 4-bar section still fits its own name. */
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  /* --fill is set per section from its energy, 0.04 .. 0.20 white */
+  background: rgba(242, 242, 242, var(--fill, 0.06));
+}
+.sect .n {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  /* Clipping a label beats an ellipsis that eats most of a short name. */
+  text-overflow: clip;
+}
+.sect .b {
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 1px;
+}
+/* A dropout is marked by a hairline notch at the section's tail. */
+.sect .notch {
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  border-left: 1px dashed var(--line-active);
+}
+
+/* -- lanes -------------------------------------------------------------- */
+
+.lanes { margin-top: var(--s5); display: flex; flex-direction: column; }
+.lane {
+  display: flex; align-items: center; gap: var(--s4);
+  padding: 3px 0;
+}
+.lane .nm {
+  width: var(--lane-label); flex: none; text-align: right;
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.lane .track {
+  position: relative;
+  flex: 1;
+  height: 12px;
+  background: rgba(242, 242, 242, 0.03);
+  border-radius: 1px;
+  overflow: hidden;
+}
+/* Section boundaries continue through the lanes as hairlines. */
+.lane .track .div {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: var(--line);
+}
+.lane .blk {
+  position: absolute; top: 1px; bottom: 1px;
+  background: var(--text-secondary);
+  border-radius: 1px;
+}
+/* Drums sit back a step so pitched material reads first. */
+.lane[data-kind="drum"] .blk { background: var(--text-muted); }
+.lane[data-kind="drum"] .nm  { color: var(--text-faint); }
+
+.arranger .foot {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s4);
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+}
+.arranger .foot .seed {
+  font-family: var(--mono); font-size: var(--fs-micro); color: var(--text-faint);
+}

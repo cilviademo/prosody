@@ -25,7 +25,7 @@ tool.
 
 The phase table above was written before the product build. Phases 1-5 are now
 largely implemented and phase 8's UI shipped early, at the founder's direction:
-the working application is Asterism, a Tauri desktop app over this backend.
+the working application is Prosody, a Tauri desktop app over this backend.
 **[CURRENT_STATUS.md](CURRENT_STATUS.md) is the authoritative state**; the
 table below is kept for the exit criteria, which still have to be met on real
 projects.

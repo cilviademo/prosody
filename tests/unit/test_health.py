@@ -70,3 +70,14 @@ def test_health_report_carries_the_project_id(backend, make_flp):
 )
 def test_state_classification(backend, make_flp, build, expected):
     assert classify_state(backend.parse(make_flp(build()))) is expected
+
+
+def test_every_status_has_human_wording():
+    """Raw enum names must never reach a primary surface."""
+    from flpfinisher.health.check import human_status
+
+    for status in HealthStatus:
+        label = human_status(status)
+        assert label and label != status.value
+        assert "_" not in label
+        assert not label.isupper()

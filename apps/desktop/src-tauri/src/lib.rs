@@ -1,4 +1,4 @@
-//! Asterism desktop shell.
+//! Prosody desktop shell.
 //!
 //! The window is a thin orchestrator: it locates the Python backend, forwards
 //! API calls to it, streams progress events to the UI, and performs the few
@@ -195,5 +195,5 @@ pub fn run() {
             read_media
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Asterism");
+        .expect("error while running Prosody");
 }

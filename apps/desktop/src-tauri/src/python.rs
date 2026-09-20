@@ -19,7 +19,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// Candidate interpreters, most specific first.
 fn interpreter_candidates(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    if let Ok(explicit) = std::env::var("ASTERISM_PYTHON") {
+    if let Ok(explicit) = std::env::var("PROSODY_PYTHON") {
         out.push(PathBuf::from(explicit));
     }
     out.push(root.join(".venv/Scripts/python.exe"));
@@ -94,7 +94,7 @@ impl Backend {
         let root = roots
             .into_iter()
             .next()
-            .ok_or_else(|| "Could not find the Asterism backend (flpfinisher/).".to_string())?;
+            .ok_or_else(|| "Could not find the Prosody backend (flpfinisher/).".to_string())?;
 
         for candidate in interpreter_candidates(&root) {
             let mut command = Command::new(&candidate);
@@ -110,7 +110,7 @@ impl Backend {
 
         Err(format!(
             "Python 3 was not found. Install Python 3.10 or newer, or set \
-             ASTERISM_PYTHON to its path. Looked beside {}.",
+             PROSODY_PYTHON to its path. Looked beside {}.",
             root.display()
         ))
     }
@@ -131,7 +131,7 @@ impl Backend {
 
         let output = command
             .output()
-            .map_err(|e| format!("Could not start the Asterism backend: {e}"))?;
+            .map_err(|e| format!("Could not start the Prosody backend: {e}"))?;
 
         if !output.status.success() && output.stdout.is_empty() {
             let stderr = String::from_utf8_lossy(&output.stderr);

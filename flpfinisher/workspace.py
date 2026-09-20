@@ -1,7 +1,7 @@
-"""Where Asterism keeps its files.
+"""Where Prosody keeps its files.
 
 Everything generated lives under one workspace the user can move, never beside
-the user's source projects. Default: ``Documents/Asterism``.
+the user's source projects. Default: ``Documents/Prosody``.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_NAME = "Asterism"
+APP_NAME = "Prosody"
 SETTINGS_FILE = "settings.json"
 
 DEFAULT_SETTINGS: dict[str, object] = {
@@ -37,7 +37,7 @@ def documents_dir() -> Path:
 
 
 def default_root() -> Path:
-    override = os.environ.get("ASTERISM_HOME")
+    override = os.environ.get("PROSODY_HOME")
     if override:
         return Path(override)
     return documents_dir() / APP_NAME

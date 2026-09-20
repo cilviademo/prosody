@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,7 +71,7 @@ def _from_registry() -> tuple[Path | None, str]:
     try:
         import winreg
     except ImportError:  # pragma: no cover
-        return None, "winreg unavailable"
+        return None, "winreg is unavailable"
 
     for key_path in _REGISTRY_KEYS:
         try:
@@ -82,17 +83,22 @@ def _from_registry() -> tuple[Path | None, str]:
             candidate = Path(value) / exe_name
             if candidate.is_file():
                 return candidate, f"registry: HKLM\\{key_path}"
-    return None, "registry: no Image-Line paths key"
+    return None, "no Image-Line paths key in the registry"
 
 
 def find_fl_executable() -> tuple[Path | None, str]:
-    """Locate FL Studio. Returns (path, how-it-was-found)."""
+    """Locate FL Studio.
+
+    Returns ``(path, reason)``. When found, ``reason`` says how; when not, it
+    is a bare phrase that callers compose into their own sentence - so nothing
+    ends up reading "not found: not found".
+    """
     override = os.environ.get("FLPF_FL_EXE")
     if override:
         candidate = Path(override)
         if candidate.is_file():
             return candidate, "FLPF_FL_EXE override"
-        return None, f"FLPF_FL_EXE points at a missing file: {override}"
+        return None, f"FLPF_FL_EXE points at a missing file ({override})"
 
     found, how = _from_registry()
     if found is not None:
@@ -109,17 +115,33 @@ def find_fl_executable() -> tuple[Path | None, str]:
             return Path(located), "PATH"
 
     if sys.platform != "win32":
-        return None, f"not found (FL Studio is Windows-only; this host is {sys.platform})"
-    return None, "not found in registry, default paths or PATH"
+        return None, f"FL Studio is Windows-only and this host is {sys.platform}"
+    return None, "not in the registry, the default install folders, or PATH"
 
 
-def describe() -> Environment:
+def describe(settings: Mapping[str, object] | None = None) -> Environment:
+    """Describe this machine's capabilities.
+
+    ``settings`` are the user's stored preferences. They take precedence over
+    the ``FLPF_*`` environment flags, which remain the CLI's way in — without
+    this the desktop Settings screen would save a preference nothing reads.
+    """
     from flpfinisher.parse import _pyflp_compat
     from flpfinisher.parse.pyflp_backend import _COMPAT_APPLIED, pyflp_version
 
     del _pyflp_compat  # imported for its side effect ordering only
 
-    fl_exe, how = find_fl_executable()
+    settings = settings or {}
+
+    configured = settings.get("fl_executable")
+    if configured and Path(str(configured)).is_file():
+        fl_exe: Path | None = Path(str(configured))
+        how = "set in Settings"
+    elif configured:
+        fl_exe, how = None, f"the path set in Settings does not exist ({configured})"
+    else:
+        fl_exe, how = find_fl_executable()
+
     ffmpeg = shutil.which("ffmpeg")
     return Environment(
         platform=sys.platform,
@@ -129,6 +151,6 @@ def describe() -> Environment:
         ffmpeg=Path(ffmpeg) if ffmpeg else None,
         pyflp_version=pyflp_version(),
         pyflp_compat_shim=_COMPAT_APPLIED,
-        render_enabled=flag("FLPF_RENDER"),
-        gui_enabled=flag("FLPF_GUI"),
+        render_enabled=bool(settings.get("render_enabled")) or flag("FLPF_RENDER"),
+        gui_enabled=bool(settings.get("gui_stems_enabled")) or flag("FLPF_GUI"),
     )

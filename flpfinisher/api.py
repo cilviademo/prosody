@@ -1,4 +1,4 @@
-"""Line-delimited JSON API for the Asterism desktop shell.
+"""Line-delimited JSON API for the Prosody desktop shell.
 
 One process per call. Progress is streamed as NDJSON so the UI can show live
 stage status, and the last line is always the final envelope:
@@ -29,7 +29,7 @@ from flpfinisher.env import describe
 from flpfinisher.extract import render_fl
 from flpfinisher.extract import stems as stems_module
 from flpfinisher.fs.safety import sha256_file
-from flpfinisher.health.check import check_project, classify_state
+from flpfinisher.health.check import check_project, classify_state, human_status
 from flpfinisher.index import db
 from flpfinisher.model.roles import Role
 from flpfinisher.model.schemas import (
@@ -166,7 +166,7 @@ def _project_payload(path: Path, workspace: Workspace) -> dict[str, Any]:
         "patternRoles": patterns,
         "health": {
             "status": health.status.value,
-            "label": _health_label(health.status),
+            "label": human_status(health.status),
             "checks": [
                 {"name": c.name, "ok": c.ok, "detail": c.detail}
                 for c in health.checks
@@ -211,23 +211,13 @@ def _remember(
     return entry
 
 
-def _health_label(status: HealthStatus) -> str:
-    return {
-        HealthStatus.READY: "Ready",
-        HealthStatus.PARTIAL: "Partly readable",
-        HealthStatus.REQUIRES_FREEZE: "Missing samples",
-        HealthStatus.BLOCKED: "Cannot be used",
-        HealthStatus.UNKNOWN: "Ready to analyse",
-    }[status]
-
-
 # --------------------------------------------------------------------------- #
 # Handlers
 # --------------------------------------------------------------------------- #
 
 
 def h_environment(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
-    env = describe()
+    env = describe(workspace.load_settings())
     can_render, render_reason = render_fl.availability(env)
     strategy, stem_reason = stems_module.available_strategy(env)
     return {
@@ -383,7 +373,8 @@ def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
 
     result = build_module.build(
         path, export_root=export_root, options=options,
-        project=project, analysis=analysis, progress=progress,
+        project=project, analysis=analysis,
+        env=describe(settings), progress=progress,
     )
 
     db.record_build(
@@ -458,11 +449,10 @@ def h_verify(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
 def h_test_fl(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     """Settings -> Test Connection."""
     candidate = payload.get("path")
+    settings = dict(workspace.load_settings())
     if candidate:
-        import os
-
-        os.environ["FLPF_FL_EXE"] = str(candidate)
-    env = describe()
+        settings["fl_executable"] = str(candidate)
+    env = describe(settings)
     found = env.fl_executable is not None
     return {
         "ok": found,

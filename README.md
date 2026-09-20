@@ -1,4 +1,4 @@
-# Asterism
+# Prosody
 
 **Turn loops into records.**
 
@@ -12,7 +12,7 @@ Drop a project → pick a genre → Finish.
 
 ## What it does
 
-1. **Drop an `.flp`.** Asterism reads its tempo, key, patterns, channels,
+1. **Drop an `.flp`.** Prosody reads its tempo, key, patterns, channels,
    plugins, mixer and samples, and classifies each channel's musical role.
 2. **Choose Extract, Arrange, or both.**
 3. **Pick a genre and structure.** Hip-hop, R&B, pop, trap, EDM or drum & bass;
@@ -27,7 +27,7 @@ never written to, moved or renamed.
 
 ### Preserve Composition
 
-The default creativity level, and the reason the product exists. Asterism may
+The default creativity level, and the reason the product exists. Prosody may
 repeat, reposition, mute and structure the patterns you already have. It may
 **not** edit notes, generate melodies, change chords, replace sounds, or touch
 your plugin presets or mixer.
@@ -53,7 +53,7 @@ One command, from the repository root:
 ```
 
 It creates the virtualenv, installs the backend and the desktop dependencies,
-runs `flpf doctor`, and launches Asterism. Needs Python 3.10+, Node 18+ and
+runs `flpf doctor`, and launches Prosody. Needs Python 3.10+, Node 18+ and
 Rust (from rustup.rs) on `PATH`.
 
 By hand, if you prefer:
@@ -63,7 +63,7 @@ python -m venv .venv
 .venv\Scripts\pip install -e ".[dev]"
 cd apps\desktop
 npm install
-npm run app          # launches Asterism (tauri dev)
+npm run app          # launches Prosody (tauri dev)
 ```
 
 On Linux or macOS, `./scripts/setup.sh` does the same. FL Studio is
@@ -88,23 +88,23 @@ npm run bundle
 The installer lands in:
 
 ```
-apps\desktop\src-tauri\target\release\bundle\nsis\Asterism_0.1.0_x64-setup.exe
-apps\desktop\src-tauri\target\release\bundle\msi\Asterism_0.1.0_x64_en-US.msi
+apps\desktop\src-tauri\target\release\bundle\nsis\Prosody_0.1.0_x64-setup.exe
+apps\desktop\src-tauri\target\release\bundle\msi\Prosody_0.1.0_x64_en-US.msi
 ```
 
-If Asterism cannot find Python it says so on startup. Set `ASTERISM_PYTHON` to
+If Prosody cannot find Python it says so on startup. Set `PROSODY_PYTHON` to
 an interpreter path to override the search.
 
 ---
 
 ## Configure FL Studio
 
-Open **Settings**. Asterism looks for FL Studio in the registry
+Open **Settings**. Prosody looks for FL Studio in the registry
 (`HKLM\SOFTWARE\Image-Line\Shared\Paths`), then the usual install folders, then
 `PATH` — no single path is hardcoded. If it is not found, use **Change** to
 pick `FL64.exe`, then **Test Connection**.
 
-Turn **Rendering** on to let Asterism run FL Studio for WAV, MP3 and stems.
+Turn **Rendering** on to let Prosody run FL Studio for WAV, MP3 and stems.
 Everything else — analysis, arrangement, the derivative `.flp`, MIDI, ZIP —
 works without FL Studio at all.
 
@@ -112,15 +112,15 @@ works without FL Studio at all.
 
 ## Where your files go
 
-Asterism writes only inside its own workspace, never beside your sources:
+Prosody writes only inside its own workspace, never beside your sources:
 
 ```
-Documents/Asterism/
+Documents/Prosody/
   Projects/  Cache/  Logs/  Database/
   Exports/
-    Starfall__ASTERISM__RNB_V001/
-      Starfall__ASTERISM__RNB.flp     the arranged project
-      Starfall__ASTERISM__RNB.zip     portable package
+    Starfall__PROSODY_RNB_V001/
+      Starfall__PROSODY_RNB_V001.flp   the arranged project
+      Starfall__PROSODY_RNB_V001.zip   portable package
       preview/   Full.wav  Full.mp3
       stems/     Kick.wav  Snare.wav  …
       midi/      01_Chords.mid  02_Melody.mid  …
@@ -135,7 +135,7 @@ Change the location under **Settings → Export folder**.
 
 ## If something is missing
 
-Asterism degrades instead of failing. Each build step reports its own outcome:
+Prosody degrades instead of failing. Each build step reports its own outcome:
 
 - **No FL Studio?** WAV, MP3 and stems are disabled with the reason shown. The
   arranged `.flp`, MIDI and ZIP are still produced.
@@ -208,6 +208,7 @@ matter most:
 | [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) | What does not work |
 | [docs/privacy.md](docs/privacy.md) | What leaves your computer (nothing) |
 | [docs/testing.md](docs/testing.md) | Test tiers and how to run them |
+| [docs/design-system.md](docs/design-system.md) | The monochrome UI system and its rules |
 | [docs/flp-compatibility.md](docs/flp-compatibility.md) | FLP format notes, verified and not |
 
 ## Tests

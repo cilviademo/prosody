@@ -10,7 +10,19 @@ import { ArrangeView, type ExportChoices } from "./views/ArrangeView";
 import { Progress, Result } from "./views/BuildView";
 import { Library } from "./views/Library";
 import { SettingsView } from "./views/Settings";
-import { Notice } from "./components/Primitives";
+import { Button, Note } from "./components/ui";
+
+/**
+ * The Prosody mark: three strokes of unequal height — a stress pattern.
+ * Bars survive an 11px render where a thin star collapses into a plus sign.
+ */
+const Mark = () => (
+  <svg className="mark" viewBox="0 0 10 11" fill="none" aria-hidden="true">
+    <rect x="0" y="1"   width="2" height="9" fill="currentColor" />
+    <rect x="4" y="4.5" width="2" height="5.5" fill="currentColor" opacity="0.55" />
+    <rect x="8" y="3"   width="2" height="7" fill="currentColor" opacity="0.78" />
+  </svg>
+);
 
 type Tab = "finish" | "library" | "settings";
 type Step = "home" | "project" | "configure" | "building" | "result";
@@ -39,8 +51,13 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
 
-  const stepRef = useRef(step);
-  stepRef.current = step;
+  const pageRef = useRef<HTMLDivElement | null>(null);
+
+  // Each screen starts at the top. Without this the scroll position carries
+  // over and a new screen appears already scrolled halfway down.
+  useEffect(() => {
+    pageRef.current?.scrollTo({ top: 0 });
+  }, [step, tab]);
 
   const refreshLibrary = useCallback(() => {
     api.library().then(setLibrary).catch(() => undefined);
@@ -51,7 +68,7 @@ export default function App() {
     void (async () => {
       const status = await backendStatus().catch((e) => ({ ok: false, error: String(e) }));
       if (!status.ok) {
-        setFatal(status.error ?? "The Asterism backend could not be reached.");
+        setFatal(status.error ?? "The Prosody backend could not be reached.");
         return;
       }
       try {
@@ -162,19 +179,27 @@ export default function App() {
   if (fatal) {
     return (
       <div className="shell">
-        <div className="titlebar">
-          <span className="brand">Asterism</span>
-        </div>
-        <div className="page">
-          <div className="page-inner">
-            <h2 style={{ fontWeight: 300 }}>Asterism could not start</h2>
-            <Notice tone="bad">{fatal}</Notice>
-            <p className="dim" style={{ marginTop: 18, lineHeight: 1.6 }}>
-              Asterism needs Python 3.10 or newer with its backend package
-              available. Install Python, or set the{" "}
-              <span className="mono">ASTERISM_PYTHON</span> environment variable to
-              the interpreter you want it to use, then restart.
+        <header className="titlebar">
+          <span className="wordmark"><Mark />Prosody</span>
+        </header>
+        <div className="page" ref={pageRef}>
+          <div className="view enter">
+            <div className="label">Startup</div>
+            <h1 className="title" style={{ marginTop: "var(--s3)" }}>
+              Prosody could not start
+            </h1>
+            <div style={{ marginTop: "var(--s5)" }}>
+              <Note strong heading="Backend unreachable">{fatal}</Note>
+            </div>
+            <p className="copy" style={{ marginTop: "var(--s5)" }}>
+              Prosody needs Python 3.10 or newer with its backend package
+              available. Install Python, or set{" "}
+              <span className="mono">PROSODY_PYTHON</span> to the interpreter you
+              want it to use, then restart.
             </p>
+            <div style={{ marginTop: "var(--s6)" }}>
+              <Button onClick={() => window.location.reload()}>Try again</Button>
+            </div>
           </div>
         </div>
       </div>
@@ -185,37 +210,40 @@ export default function App() {
 
   return (
     <div className="shell">
-      <div className="titlebar">
-        <span className="brand">
-          <b>✳</b> Asterism
+      <header className="titlebar">
+        <span className="wordmark">
+          <Mark />
+          Prosody
         </span>
         <nav className="nav">
           {(["finish", "library", "settings"] as Tab[]).map((t) => (
             <button
               key={t}
-              className={tab === t ? "on" : ""}
+              type="button"
+              aria-current={tab === t ? "page" : undefined}
               onClick={() => {
                 setTab(t);
                 if (t === "library") refreshLibrary();
               }}
-              type="button"
             >
               {t}
             </button>
           ))}
         </nav>
-        <span className="spacer" />
+        <span className="grow" />
         <button
-          className={`fl-chip ${env?.canRender ? "on" : ""}`}
+          className="status-chip"
+          data-on={Boolean(env?.canRender)}
           onClick={() => setTab("settings")}
           type="button"
+          title={env?.renderReason}
         >
-          <span className="dot" />
-          {env?.canRender ? "FL Studio connected" : "FL Studio not configured"}
+          <span className="led" aria-hidden="true" />
+          {env?.canRender ? "FL Studio ready" : "FL Studio not configured"}
         </button>
-      </div>
+      </header>
 
-      <div className="page">
+      <div className="page" ref={pageRef}>
         {tab === "finish" && step === "home" && (
           <Home onOpen={openProject} recent={library} busy={opening} error={error} />
         )}
@@ -231,8 +259,8 @@ export default function App() {
         {tab === "finish" && step === "configure" && project && (
           <>
             {error && (
-              <div className="page-inner" style={{ paddingBottom: 0 }}>
-                <Notice tone="bad">{error}</Notice>
+              <div className="view" style={{ paddingBottom: 0 }}>
+                <Note strong heading="Build failed">{error}</Note>
               </div>
             )}
             <ArrangeView
@@ -260,6 +288,7 @@ export default function App() {
         {tab === "library" && (
           <Library
             items={library}
+            genres={genres}
             onOpen={openProject}
             onReveal={(dir) => void shell.reveal(dir)}
           />

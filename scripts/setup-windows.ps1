@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Sets up and launches Asterism on a Windows studio PC.
+    Sets up and launches Prosody on a Windows studio PC.
 
 .DESCRIPTION
     Creates the Python virtualenv, installs the backend and the desktop
@@ -39,7 +39,7 @@ if (-not (Test-Path ".venv")) {
     Write-Host "Creating virtualenv..." -ForegroundColor Cyan
     python -m venv .venv
 }
-Write-Host "Installing the Asterism backend..." -ForegroundColor Cyan
+Write-Host "Installing the Prosody backend..." -ForegroundColor Cyan
 & ".venv\Scripts\python.exe" -m pip install --quiet --upgrade pip
 & ".venv\Scripts\python.exe" -m pip install --quiet -e ".[dev]"
 
@@ -47,7 +47,7 @@ Write-Host "Checking the environment..." -ForegroundColor Cyan
 & ".venv\Scripts\flpf.exe" doctor
 
 # Point the desktop app at this interpreter so it does not have to guess.
-$env:ASTERISM_PYTHON = (Resolve-Path ".venv\Scripts\python.exe").Path
+$env:PROSODY_PYTHON = (Resolve-Path ".venv\Scripts\python.exe").Path
 
 # --- desktop --------------------------------------------------------------
 Set-Location "apps\desktop"
@@ -66,6 +66,6 @@ if ($Bundle) {
     if (Test-Path $nsis) { Get-ChildItem $nsis -Filter *.exe | ForEach-Object { Write-Host "  $($_.FullName)" } }
     if (Test-Path $msi)  { Get-ChildItem $msi  -Filter *.msi | ForEach-Object { Write-Host "  $($_.FullName)" } }
 } else {
-    Write-Host "Launching Asterism..." -ForegroundColor Green
+    Write-Host "Launching Prosody..." -ForegroundColor Green
     npm run app
 }

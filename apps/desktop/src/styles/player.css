@@ -1,0 +1,53 @@
+/* Prosody — preview transport. A single row of hairline controls. */
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.player .transport {
+  width: 30px; height: 30px; flex: none;
+  display: grid; place-items: center;
+  font-size: 10px;
+  color: var(--text-secondary);
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  transition: all var(--fast) var(--ease);
+}
+.player .transport:hover:not(:disabled) {
+  background: var(--on); border-color: var(--on); color: var(--on-text);
+}
+.player .transport:disabled { color: var(--text-faint); border-color: var(--line); }
+
+.player input[type="range"] {
+  appearance: none;
+  height: 2px;
+  background: var(--line-strong);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.player input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--text);
+  cursor: pointer;
+}
+.player input[type="range"]:disabled { cursor: default; }
+.player input[type="range"]:disabled::-webkit-slider-thumb { background: var(--text-faint); }
+
+.player .seek { flex: 1; }
+.player .vol { width: 58px; flex: none; }
+.player .vol::-webkit-slider-thumb { background: var(--text-muted); }
+
+.player .time {
+  font-family: var(--mono);
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

@@ -20,6 +20,20 @@ from flpfinisher.model.schemas import (
     Severity,
 )
 
+#: Human wording for each status. Raw enum names never reach a primary
+#: surface; they stay in diagnostics where the precision is wanted.
+STATUS_LABELS: dict[HealthStatus, str] = {
+    HealthStatus.READY: "Ready",
+    HealthStatus.PARTIAL: "Partly readable",
+    HealthStatus.REQUIRES_FREEZE: "Missing samples",
+    HealthStatus.BLOCKED: "Cannot be used",
+    HealthStatus.UNKNOWN: "Ready to analyse",
+}
+
+
+def human_status(status: HealthStatus) -> str:
+    return STATUS_LABELS.get(status, status.value)
+
 
 def classify_state(project: BeatProject) -> ProjectState:
     """How finished the source project looks, from structure alone."""

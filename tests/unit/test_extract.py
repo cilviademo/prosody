@@ -35,7 +35,8 @@ def kit(backend, make_flp):
 def offline_env(**kw) -> Environment:
     base = {
         "platform": "linux", "python_version": "3.12.0", "fl_executable": None,
-        "fl_discovery": "not found", "ffmpeg": None, "pyflp_version": "2.2.1",
+        "fl_discovery": "FL Studio is Windows-only and this host is linux",
+        "ffmpeg": None, "pyflp_version": "2.2.1",
         "pyflp_compat_shim": True, "render_enabled": False, "gui_enabled": False,
     }
     base.update(kw)
@@ -208,13 +209,28 @@ def test_render_is_unavailable_without_fl_studio():
     assert not ok and "not found" in reason
 
 
-def test_render_is_unavailable_when_the_flag_is_off(tmp_path):
+def test_render_is_unavailable_when_rendering_is_turned_off(tmp_path):
     fake = tmp_path / "FL64.exe"
     fake.write_bytes(b"")
     ok, reason = render_fl.availability(
         offline_env(fl_executable=fake, render_enabled=False)
     )
-    assert not ok and "FLPF_RENDER" in reason
+    assert not ok
+    assert "turned off" in reason
+
+
+def test_discovery_reasons_are_phrases_not_sentences():
+    """``availability`` composes "FL Studio not found — {reason}", so a reason
+    that itself says "not found" produces "not found: not found" on screen."""
+    from flpfinisher.env import find_fl_executable
+
+    _, reason = find_fl_executable()
+    assert "not found" not in reason.lower()
+
+
+def test_the_composed_render_reason_reads_cleanly():
+    _, reason = render_fl.availability(offline_env())
+    assert reason.lower().count("not found") == 1
 
 
 def test_render_returns_a_failed_result_rather_than_raising(tmp_path):

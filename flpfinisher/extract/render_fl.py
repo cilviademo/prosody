@@ -56,9 +56,9 @@ def availability(env: Environment | None = None) -> tuple[bool, str]:
     """(can_render, human-readable reason)."""
     env = env or describe()
     if env.fl_executable is None:
-        return False, f"FL Studio not found: {env.fl_discovery}"
+        return False, f"FL Studio not found — {env.fl_discovery}"
     if not env.render_enabled:
-        return False, "rendering is disabled (set FLPF_RENDER=1)"
+        return False, "rendering is turned off"
     return True, f"FL Studio at {env.fl_executable}"
 
 

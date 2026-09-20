@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sets up and launches Asterism for development on Linux/macOS.
+# Sets up and launches Prosody for development on Linux/macOS.
 # The shipping target is Windows; this exists so the app can be worked on
 # anywhere. FL Studio, and therefore rendering and stems, remain unavailable.
 set -euo pipefail
@@ -16,7 +16,7 @@ command -v cargo   >/dev/null || { echo "rust/cargo is required"; exit 1; }
 ./.venv/bin/pip install --quiet -e ".[dev]"
 ./.venv/bin/flpf doctor || true
 
-export ASTERISM_PYTHON="$repo/.venv/bin/python"
+export PROSODY_PYTHON="$repo/.venv/bin/python"
 
 cd apps/desktop
 [ -d node_modules ] || npm install

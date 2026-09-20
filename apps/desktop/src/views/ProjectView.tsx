@@ -1,6 +1,15 @@
-import type { Project } from "../lib/types";
-import { Advanced, Health, Notice, Panel } from "../components/Primitives";
+import type { Project, RoleFlag } from "../lib/types";
+import {
+  Advanced, Back, Badge, Data, KeyValues, Note, Option, Readout, Section,
+} from "../components/ui";
 import { bars, clock, tempo } from "../lib/format";
+
+const ROLE_GLYPH: Record<string, string> = { on: "●", maybe: "◐", off: "·" };
+
+function roleState(role: RoleFlag): "on" | "maybe" | "off" {
+  if (role.present) return "on";
+  return role.likely ? "maybe" : "off";
+}
 
 export function ProjectView({
   project, onChoose, onBack,
@@ -11,171 +20,171 @@ export function ProjectView({
 }) {
   const c = project.counts;
   const blocked = project.health.status === "BLOCKED";
+  const missing = c.samplesMissing;
 
   return (
-    <div className="page-inner fade">
-      <button className="btn ghost" onClick={onBack} type="button"
-              style={{ marginBottom: 18, padding: "6px 12px" }}>
-        ← Back
-      </button>
+    <div className="view enter">
+      <Back onClick={onBack}>Back</Back>
 
-      <div className="project-head">
-        <div className="titles">
-          <h1>{project.name}</h1>
-          <div className="facts">
-            <span className="fact">
-              <span className="v">{tempo(project.tempo)}</span>
-              <span className="k">BPM</span>
-            </span>
-            {project.key && (
-              <span className="fact">
-                <span className="v">{project.key}</span>
-                <span className="k">Key{project.keyConfidence < 0.7 ? " ·  approx" : ""}</span>
-              </span>
-            )}
-            <span className="fact">
-              <span className="v">{bars(project.lengthBars)}</span>
-              <span className="k">Bars</span>
-            </span>
-            <span className="fact">
-              <span className="v">{clock(project.durationSeconds)}</span>
-              <span className="k">Length</span>
-            </span>
-            <span className="fact">
-              <span className="v">
-                {project.timeSignature[0]}/{project.timeSignature[1]}
-              </span>
-              <span className="k">Time</span>
-            </span>
-          </div>
-        </div>
-        <Health status={project.health.status} label={project.health.label} />
+      <div className="row-between" style={{ alignItems: "flex-start" }}>
+        <h1 className="title truncate grow">{project.name}</h1>
+        <Badge on={project.health.status === "READY"}>{project.health.label}</Badge>
       </div>
 
-      <div className="grid-2">
-        <Panel>
-          <span className="eyebrow">Project</span>
-          <div className="rolelist" style={{ marginTop: 14 }}>
-            {project.roles.map((r) => (
-              <div
-                key={r.role}
-                className={`role ${r.present ? "" : r.likely ? "maybe" : "off"}`}
-                title={
-                  r.likely
-                    ? "Detected, but below the confidence threshold. It is still used when arranging."
-                    : undefined
-                }
-              >
-                <span className="tick">{r.present ? "✓" : r.likely ? "~" : "·"}</span>
-                <span>{r.label}</span>
-                {r.likely && <span className="hint">likely</span>}
-              </div>
-            ))}
-          </div>
-        </Panel>
+      <div style={{ marginTop: "var(--s5)" }}>
+        <Readout
+          items={[
+            { value: tempo(project.tempo), caption: "BPM" },
+            { value: project.key ?? "—",
+              caption: project.keyConfidence < 0.7 ? "Key · approx" : "Key" },
+            { value: bars(project.lengthBars), caption: "Bars" },
+            { value: clock(project.durationSeconds), caption: "Length" },
+            { value: `${project.timeSignature[0]}/${project.timeSignature[1]}`, caption: "Time" },
+          ]}
+        />
+      </div>
 
-        <Panel>
-          <span className="eyebrow">Contents</span>
-          <div className="statlist" style={{ marginTop: 14 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.35fr 1fr",
+          gap: "var(--s8)",
+          marginTop: "var(--s8)",
+        }}
+      >
+        <Section title="Material">
+          <div className="roles">
+            {project.roles.map((role) => {
+              const state = roleState(role);
+              return (
+                <div key={role.role} className="role" data-state={state}>
+                  <span className="g" aria-hidden="true">{ROLE_GLYPH[state]}</span>
+                  <span>{role.label}</span>
+                  {state === "maybe" && <span className="tag">likely</span>}
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+
+        <Section title="Contents">
+          <div className="stats">
             <div className="stat"><span className="k">Patterns</span><span className="v">{c.patterns}</span></div>
             <div className="stat"><span className="k">Channels</span><span className="v">{c.channels}</span></div>
             <div className="stat"><span className="k">Plugins</span><span className="v">{c.plugins}</span></div>
             <div className="stat"><span className="k">Mixer tracks</span><span className="v">{c.mixerTracks}</span></div>
             <div className="stat"><span className="k">Notes</span><span className="v">{c.notes}</span></div>
             <div className="stat"><span className="k">Playlist clips</span><span className="v">{c.playlistClips}</span></div>
-            {c.samplesMissing > 0 && (
-              <div className="stat">
-                <span className="k">Missing samples</span>
-                <span className="v" style={{ color: "var(--warn)" }}>{c.samplesMissing}</span>
+            {missing > 0 && (
+              <div className="stat" data-flag="true">
+                <span className="k">Missing samples</span><span className="v">{missing}</span>
               </div>
             )}
           </div>
-        </Panel>
+        </Section>
       </div>
 
-      {c.samplesMissing > 0 && (
-        <Notice tone="warn">
-          {c.samplesMissing} sample{c.samplesMissing === 1 ? "" : "s"} referenced by
-          this project could not be found on this machine. Arranging still works —
-          the derivative keeps the same references — but rendering audio will be
-          incomplete until the samples are relinked in FL Studio.
-        </Notice>
-      )}
-
-      {blocked && (
-        <Notice tone="bad">
-          This project could not be read well enough to work with. See Diagnostics
-          below for what failed.
-        </Notice>
-      )}
-
-      <div className="section-gap">
-        <span className="eyebrow">What do you want to do?</span>
-        <div className="choices">
-          <button className="choice" onClick={() => onChoose("extract")}
-                  disabled={blocked} type="button">
-            <div className="t">Extract</div>
-            <div className="d">Audio, MIDI and a portable copy of the project as it is.</div>
-          </button>
-          <button className="choice" onClick={() => onChoose("arrange")}
-                  disabled={blocked || !project.canArrange} type="button">
-            <div className="t">Arrange</div>
-            <div className="d">
-              {project.canArrange
-                ? "Build a full song structure from the patterns you already have."
-                : "Needs patterns with notes."}
-            </div>
-          </button>
-          <button className="choice primary" onClick={() => onChoose("both")}
-                  disabled={blocked || !project.canArrange} type="button">
-            <div className="t">Extract + Arrange</div>
-            <div className="d">The arranged project, plus every export.</div>
-          </button>
+      {(missing > 0 || blocked) && (
+        <div className="stack-4" style={{ marginTop: "var(--s7)" }}>
+          {missing > 0 && (
+            <Note heading="Samples">
+              {missing} sample{missing === 1 ? "" : "s"} could not be found here.
+              Arranging still works — the new project keeps the same references —
+              but rendered audio will be incomplete until they are relinked in
+              FL Studio.
+            </Note>
+          )}
+          {blocked && (
+            <Note strong heading="Unreadable">
+              This project could not be read well enough to work with. Diagnostics
+              below list what failed.
+            </Note>
+          )}
         </div>
+      )}
+
+      <div style={{ marginTop: "var(--s8)" }}>
+        <Section title="Next">
+          <div className="option-rows">
+            <Option
+              title="Extract"
+              detail="Audio, MIDI and a portable copy of the project as it stands."
+              disabled={blocked}
+              onClick={() => onChoose("extract")}
+            />
+            <Option
+              title="Arrange"
+              detail={
+                project.canArrange
+                  ? "Build a full song structure from the patterns already here."
+                  : "Needs at least one pattern with notes."
+              }
+              disabled={blocked || !project.canArrange}
+              onClick={() => onChoose("arrange")}
+            />
+            <Option
+              title="Extract and arrange"
+              detail="The arranged project, plus every export."
+              emphasis
+              disabled={blocked || !project.canArrange}
+              onClick={() => onChoose("both")}
+            />
+          </div>
+        </Section>
       </div>
 
       <Advanced title="Diagnostics">
-        <dl className="kv">
-          <dt>FL Studio version</dt><dd>{project.flVersion ?? "not recorded"}</dd>
-          <dt>Detected state</dt><dd>{project.state}</dd>
-          <dt>SHA-256</dt><dd className="mono">{project.hash}</dd>
-          <dt>Source path</dt><dd className="mono">{project.path}</dd>
-        </dl>
+        <KeyValues
+          rows={[
+            ["FL Studio version", project.flVersion ?? "not recorded"],
+            ["Detected state", project.state],
+            ["Source", <span className="mono" key="p">{project.path}</span>],
+            ["SHA-256", <span className="mono" key="h">{project.hash}</span>],
+          ]}
+        />
 
         {project.uncertain.length > 0 && (
           <>
-            <p style={{ margin: "18px 0 8px" }}>
-              Channels the classifier is unsure about. These are excluded from
-              arrangement decisions until confidence passes 0.70.
+            <p className="copy" style={{ margin: "var(--s5) 0 0" }}>
+              Channels below the 0.70 confidence threshold. They are marked
+              “likely” rather than counted as fact.
             </p>
-            <pre>
-{project.uncertain
-  .map((u) => `${(u.name ?? `channel ${u.channel}`).padEnd(22)} ${u.role.padEnd(9)} ${u.confidence.toFixed(2)}  ${u.sources.join(", ")}`)
-  .join("\n")}
-            </pre>
+            <Data>
+              {project.uncertain
+                .map((u) =>
+                  `${(u.name ?? `channel ${u.channel}`).padEnd(22)}` +
+                  `${u.role.padEnd(9)}${u.confidence.toFixed(2)}  ${u.sources.join(", ")}`)
+                .join("\n")}
+            </Data>
           </>
         )}
 
-        <p style={{ margin: "18px 0 8px" }}>Pattern roles</p>
-        <pre>
-{project.patternRoles
-  .map((p) => `${String(p.pattern).padStart(3)}  ${p.name.padEnd(22)} ${p.role.padEnd(9)} ${p.notes} notes`)
-  .join("\n") || "none"}
-        </pre>
+        <p className="copy" style={{ margin: "var(--s5) 0 0" }}>Pattern roles</p>
+        <Data>
+          {project.patternRoles
+            .map((p) =>
+              `${String(p.pattern).padStart(3)}  ${p.name.padEnd(22)}` +
+              `${p.role.padEnd(9)}${p.notes} notes`)
+            .join("\n") || "none"}
+        </Data>
 
-        <p style={{ margin: "18px 0 8px" }}>Health checks</p>
-        <pre>
-{project.health.checks
-  .map((h) => `${h.ok === true ? "ok  " : h.ok === false ? "FAIL" : "?   "} ${h.name.padEnd(22)} ${h.detail}`)
-  .join("\n")}
-        </pre>
+        <p className="copy" style={{ margin: "var(--s5) 0 0" }}>Health checks</p>
+        <Data>
+          {project.health.checks
+            .map((h) =>
+              `${h.ok === true ? "ok  " : h.ok === false ? "fail" : "?   "} ` +
+              `${h.name.padEnd(22)}${h.detail}`)
+            .join("\n")}
+        </Data>
 
         {project.warnings.length > 0 && (
           <>
-            <p style={{ margin: "18px 0 8px" }}>Parser notes</p>
-            <pre>
-{project.warnings.map((w) => `${w.severity.padEnd(8)} ${w.code}: ${w.message}`).join("\n")}
-            </pre>
+            <p className="copy" style={{ margin: "var(--s5) 0 0" }}>Parser notes</p>
+            <Data>
+              {project.warnings
+                .map((w) => `${w.severity.padEnd(8)}${w.code}: ${w.message}`)
+                .join("\n")}
+            </Data>
           </>
         )}
       </Advanced>

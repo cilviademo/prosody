@@ -27,7 +27,7 @@ from flpfinisher.extract import stems as stems_module
 from flpfinisher.extract.midi import write_role_midi
 from flpfinisher.extract.package import package_project
 from flpfinisher.fs.safety import sha256_file, slugify, versioned_path
-from flpfinisher.health.check import check_project, classify_state
+from flpfinisher.health.check import check_project, classify_state, human_status
 from flpfinisher.model.schemas import (
     Analysis,
     ArrangementPlan,
@@ -46,7 +46,7 @@ from flpfinisher.write.flp_writer import WriteUnsupported, write_arrangement
 
 ProgressFn = Callable[[str, str, str], None]  # (stage, status, detail)
 
-APP_TAG = "ASTERISM"
+APP_TAG = "PROSODY"
 
 
 @dataclass
@@ -99,21 +99,28 @@ def artifact(kind: ArtifactKind, path: Path, label: str) -> Artifact:
     )
 
 
-def output_name(source: Path, genre: str) -> str:
-    return f"{source.stem}__{APP_TAG}__{genre.upper()}"
+def output_stem(source: Path, genre: str, version: int) -> str:
+    """``Starfall__PROSODY_RNB_V001`` - the name shared by the folder and its
+    generated project, so a file is identifiable once moved out of its folder."""
+    return f"{source.stem}__{APP_TAG}_{genre.upper()}_V{version:03d}"
+
+
+def output_name(source: Path, genre: str, version: int = 1) -> str:
+    return output_stem(source, genre, version)
 
 
 def prepare_output_dir(export_root: Path, source: Path, genre: str) -> Path:
-    """``<exports>/<Source__ASTERISM__GENRE_Vnnn>/`` - never reused."""
-    base = output_name(source, genre)
+    """``<exports>/<Source__PROSODY_GENRE_Vnnn>/`` - versioned, never reused."""
     parent = Path(export_root)
     parent.mkdir(parents=True, exist_ok=True)
-    for n in range(1, 1000):
-        candidate = parent / f"{base}_V{n:03d}"
+    for version in range(1, 1000):
+        candidate = parent / output_stem(source, genre, version)
         if not candidate.exists():
             candidate.mkdir(parents=True)
             return candidate
-    raise FileExistsError(f"exhausted 999 versions of {base}")
+    raise FileExistsError(
+        f"exhausted 999 versions of {source.stem} for {genre}"
+    )
 
 
 def build(
@@ -141,11 +148,14 @@ def build(
     if analysis is None:
         analysis = analyse_project(project, classify_state(project))
     health = check_project(project)
-    out_dir = prepare_output_dir(export_root, source, options.genre if options.arrange else "extract")
+    genre_tag = options.genre if options.arrange else "extract"
+    out_dir = prepare_output_dir(export_root, source, genre_tag)
+    # The folder name already carries the version; artefacts reuse it verbatim.
+    artifact_stem = out_dir.name
     recorder.finish(
         "Preparing project", StageStatus.OK,
-        f"{len(project.patterns)} patterns, {len(project.channels)} channels, "
-        f"health {health.status.value}",
+        f"{len(project.patterns)} patterns, {len(project.channels)} channels"
+        f" · {human_status(health.status).lower()}",
     )
 
     for sub in ("preview", "stems", "midi", "data", "reports"):
@@ -192,7 +202,7 @@ def build(
         # -- native derivative .flp ---------------------------------------- #
         if plan is not None:
             recorder.begin("Writing FL Studio project")
-            destination = out_dir / f"{output_name(source, options.genre)}.flp"
+            destination = out_dir / f"{artifact_stem}.flp"
             try:
                 report = write_arrangement(source, destination, plan, project)
                 result = validate_derivative(
@@ -267,7 +277,7 @@ def build(
         if not can_render:
             recorder.finish(
                 "Rendering audio", StageStatus.SKIPPED,
-                f"{reason}. Configure FL Studio in Settings to render audio.",
+                f"{reason}. Set it up in Settings to render audio.",
             )
         else:
             formats = tuple(
@@ -334,7 +344,7 @@ def build(
         recorder.begin("Packaging project")
         try:
             zip_source = flp_path or source
-            zip_path = out_dir / f"{output_name(source, options.genre)}.zip"
+            zip_path = out_dir / f"{artifact_stem}.zip"
             extra = {}
             plan_file = out_dir / "data" / "arrangement.json"
             if plan_file.is_file():

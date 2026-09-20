@@ -20,7 +20,7 @@ from tests.fixtures.projects import full_kit, melody_only, no_notes
 
 @pytest.fixture
 def workspace(tmp_path):
-    return Workspace.open(tmp_path / "Asterism")
+    return Workspace.open(tmp_path / "Prosody")
 
 
 @pytest.fixture
@@ -94,17 +94,29 @@ def test_forgetting_a_project_removes_only_the_row(workspace):
 
 # -- output naming ---------------------------------------------------------- #
 
-def test_output_name_includes_the_app_and_genre(tmp_path):
-    assert output_name(tmp_path / "Starfall.flp", "rnb") == "Starfall__ASTERISM__RNB"
+def test_output_name_carries_the_product_genre_and_version(tmp_path):
+    assert output_name(tmp_path / "Starfall.flp", "rnb") == "Starfall__PROSODY_RNB_V001"
+    assert output_name(tmp_path / "Starfall.flp", "rnb", 12) == "Starfall__PROSODY_RNB_V012"
 
 
 def test_output_directories_are_versioned_never_reused(tmp_path):
     source = tmp_path / "Starfall.flp"
     first = prepare_output_dir(tmp_path / "out", source, "rnb")
     second = prepare_output_dir(tmp_path / "out", source, "rnb")
-    assert first.name.endswith("_V001")
-    assert second.name.endswith("_V002")
+    assert first.name == "Starfall__PROSODY_RNB_V001"
+    assert second.name == "Starfall__PROSODY_RNB_V002"
     assert first != second
+
+
+def test_generated_files_share_the_versioned_folder_name(source, tmp_path):
+    """A .flp moved out of its folder must still say which version it is."""
+    from pathlib import Path
+
+    result = run(source, tmp_path, genre="rnb")
+    out = Path(result.out_dir)
+    assert out.name == "Starfall__PROSODY_RNB_V001"
+    assert (out / f"{out.name}.flp").is_file()
+    assert (out / f"{out.name}.zip").is_file()
 
 
 # -- build ------------------------------------------------------------------ #
@@ -370,3 +382,51 @@ def test_an_llm_provider_falls_back_instead_of_failing(source):
         PlanRequest(project=project, analysis=analysis, genre="pop")
     )
     assert plans and plans[0].sections
+
+
+# -- settings actually take effect ------------------------------------------ #
+
+def test_stored_fl_path_is_used_over_discovery(workspace, tmp_path):
+    """The Settings screen saves a path; the environment must honour it."""
+    from flpfinisher.env import describe
+
+    fake = tmp_path / "FL64.exe"
+    fake.write_bytes(b"")
+    env = describe({"fl_executable": str(fake)})
+    assert env.fl_executable == fake
+    assert "Settings" in env.fl_discovery
+
+
+def test_a_stored_fl_path_that_no_longer_exists_is_reported(tmp_path):
+    from flpfinisher.env import describe
+
+    env = describe({"fl_executable": str(tmp_path / "gone.exe")})
+    assert env.fl_executable is None
+    assert "does not exist" in env.fl_discovery
+
+
+def test_the_rendering_toggle_enables_rendering(tmp_path, monkeypatch):
+    """Without this wiring the toggle saves a preference nothing reads."""
+    from flpfinisher.env import describe
+
+    monkeypatch.delenv("FLPF_RENDER", raising=False)
+    assert describe({}).render_enabled is False
+    assert describe({"render_enabled": True}).render_enabled is True
+
+
+def test_the_environment_flag_still_works_for_the_cli(monkeypatch):
+    from flpfinisher.env import describe
+
+    monkeypatch.setenv("FLPF_RENDER", "1")
+    assert describe({}).render_enabled is True
+
+
+def test_environment_endpoint_reflects_saved_settings(workspace, tmp_path):
+    fake = tmp_path / "FL64.exe"
+    fake.write_bytes(b"")
+    call("settings.set",
+         {"settings": {"fl_executable": str(fake), "render_enabled": True}},
+         workspace)
+    result, _ = call("environment", {}, workspace)
+    assert result["data"]["flExecutable"] == str(fake)
+    assert result["data"]["canRender"] is True
