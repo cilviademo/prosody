@@ -1,0 +1,21 @@
+{
+  "genre": "hiphop",
+  "grammar": {
+    "short":    ["intro:4", "hook:8", "verse:16", "hook:8", "outro:4"],
+    "balanced": ["intro:4", "hook:8", "verse:16", "hook:8", "verse:16", "bridge:8", "hook:16", "outro:4"],
+    "full":     ["intro:4", "hook:8", "verse:16", "hook:8", "verse:16", "bridge:8", "hook:16", "bridge:8", "hook:16", "outro:8"]
+  },
+  "energy": {
+    "intro": 0.30, "verse": 0.55, "pre": 0.65, "hook": 0.90,
+    "chorus": 0.90, "bridge": 0.45, "breakdown": 0.35, "outro": 0.30
+  },
+  "role_weights": {
+    "kick": 0.20, "snare": 0.15, "hats": 0.10, "bass": 0.20, "chords": 0.15,
+    "melody": 0.15, "counter": 0.10, "perc": 0.05, "fx": 0.05, "vocal": 0.10,
+    "unknown": 0.0
+  },
+  "rules": [
+    "bass.first_entry == first(hook)",
+    "drums.dropout_before(hook) == 1"
+  ]
+}

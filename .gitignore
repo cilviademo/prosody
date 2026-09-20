@@ -1,0 +1,29 @@
+# Never commit the user's music. corpus/ is a junction/symlink to real projects.
+corpus/*
+!corpus/README.md
+out/
+*.flp
+*.wav
+*.mp3
+*.mid
+*.zip
+!tests/golden/*.json
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "fl_version": "21.2.3.4004",
+  "fl_build": null,
+  "format": 0,
+  "tempo": 140.0,
+  "ppq": 96,
+  "time_signature": [
+    4,
+    4
+  ],
+  "length_ticks": 0,
+  "key_guess": null,
+  "title": "Empty",
+  "channels": [],
+  "patterns": [],
+  "mixer": [],
+  "arrangements": [
+    {
+      "index": 0,
+      "name": "Arrangement",
+      "tracks": [],
+      "clips": [],
+      "markers": []
+    }
+  ],
+  "samples": [],
+  "plugins": [],
+  "unknown_event_ids": [],
+  "parse_warnings": [
+    {
+      "code": "channels",
+      "message": "KeyError: <ChannelID.New: 64>",
+      "severity": "warning"
+    },
+    {
+      "code": "arrangement_tracks",
+      "message": "KeyError: <ChannelID.New: 64>",
+      "severity": "warning"
+    }
+  ],
+  "_health_status": "BLOCKED",
+  "_state": "empty"
+}

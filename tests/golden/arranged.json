@@ -1,0 +1,237 @@
+{
+  "schema_version": "1.0",
+  "fl_version": "21.2.3.4004",
+  "fl_build": null,
+  "format": 0,
+  "tempo": 140.0,
+  "ppq": 96,
+  "time_signature": [
+    4,
+    4
+  ],
+  "length_ticks": 6144,
+  "key_guess": null,
+  "title": "Arranged",
+  "channels": [
+    {
+      "index": 0,
+      "name": "Kick",
+      "kind": "sampler",
+      "plugin": null,
+      "sample_path": null,
+      "mixer_track": 1,
+      "enabled": true
+    }
+  ],
+  "patterns": [
+    {
+      "index": 1,
+      "name": "Drums",
+      "length_ticks": 1488,
+      "notes": [
+        {
+          "channel": 0,
+          "position": 0,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 96,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 192,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 288,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 384,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 480,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 576,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 672,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 768,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 864,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 960,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 1056,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 1152,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 1248,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 1344,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        },
+        {
+          "channel": 0,
+          "position": 1440,
+          "length": 48,
+          "key": 60,
+          "velocity": 100,
+          "pan": 64
+        }
+      ]
+    }
+  ],
+  "mixer": [
+    {
+      "index": 0,
+      "name": "Master",
+      "effects": [],
+      "routes_to": []
+    },
+    {
+      "index": 1,
+      "name": "Kick",
+      "effects": [],
+      "routes_to": []
+    }
+  ],
+  "arrangements": [
+    {
+      "index": 0,
+      "name": "Arrangement",
+      "tracks": [
+        {
+          "index": 0,
+          "name": "Drums",
+          "clip_count": 4
+        }
+      ],
+      "clips": [
+        {
+          "track": 0,
+          "kind": "pattern",
+          "pattern": 1,
+          "channel": null,
+          "start_ticks": 0,
+          "length_ticks": 1536
+        },
+        {
+          "track": 0,
+          "kind": "pattern",
+          "pattern": 1,
+          "channel": null,
+          "start_ticks": 1536,
+          "length_ticks": 1536
+        },
+        {
+          "track": 0,
+          "kind": "pattern",
+          "pattern": 1,
+          "channel": null,
+          "start_ticks": 3072,
+          "length_ticks": 1536
+        },
+        {
+          "track": 0,
+          "kind": "pattern",
+          "pattern": 1,
+          "channel": null,
+          "start_ticks": 4608,
+          "length_ticks": 1536
+        }
+      ],
+      "markers": []
+    }
+  ],
+  "samples": [],
+  "plugins": [],
+  "unknown_event_ids": [],
+  "parse_warnings": [
+    {
+      "code": "mixer_slots_undescribable",
+      "message": "project has no mixer Params event; insert effect chains cannot be enumerated by this backend",
+      "severity": "info"
+    }
+  ],
+  "_health_status": "UNKNOWN",
+  "_state": "partial"
+}

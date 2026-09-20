@@ -1,0 +1,21 @@
+{
+  "genre": "rnb",
+  "grammar": {
+    "short":    ["intro:8", "verse:16", "pre:4", "chorus:8", "outro:8"],
+    "balanced": ["intro:8", "verse:16", "pre:4", "chorus:8", "verse:16", "pre:4", "chorus:8", "bridge:8", "chorus:8", "outro:8"],
+    "full":     ["intro:8", "verse:16", "pre:4", "chorus:8", "verse:16", "pre:4", "chorus:8", "bridge:8", "chorus:16", "outro:8"]
+  },
+  "energy": {
+    "intro": 0.25, "verse": 0.50, "pre": 0.65, "hook": 0.85,
+    "chorus": 0.85, "bridge": 0.40, "breakdown": 0.30, "outro": 0.25
+  },
+  "role_weights": {
+    "kick": 0.20, "snare": 0.15, "hats": 0.10, "bass": 0.20, "chords": 0.15,
+    "melody": 0.15, "counter": 0.10, "perc": 0.05, "fx": 0.05, "vocal": 0.10,
+    "unknown": 0.0
+  },
+  "rules": [
+    "chords.lead_in_verses == true",
+    "perc.thinned_in_verses == true"
+  ]
+}
