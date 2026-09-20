@@ -30,6 +30,10 @@ def test_sha256_matches_hashlib(tmp_path: Path):
         ("beat_v7 FINAL (2)", "beat-v7-final-2"),
         ("  ...  ", "untitled"),
         ("C:/x/My Beat.flp", "c-x-my-beat-flp"),
+        # What a Windows drop actually looks like. A surviving backslash would
+        # turn the export folder name into a nested path.
+        ("C:\\x\\My Beat.flp", "c-x-my-beat-flp"),
+        ("Beat<v2>|final?", "beat-v2-final"),
     ],
 )
 def test_slugify(raw, expected):

@@ -211,7 +211,15 @@ export function SettingsView({
               ["Rendering", env.canRender ? "available" : env.renderReason],
               ["Stems", env.stemStrategy ?? env.stemReason],
               ["Workspace", <span className="mono" key="w">{env.workspace}</span>],
-              ["ffmpeg", <span className="mono" key="g">{env.ffmpeg ?? "not found"}</span>],
+              // FL Studio encodes MP3 itself during a command-line render, so
+              // nothing here calls ffmpeg. Saying "not found" without saying
+              // "not needed" reads as a broken install on a fresh machine.
+              [
+                "ffmpeg",
+                <span className="mono" key="g">
+                  {env.ffmpeg ?? "not present — not required"}
+                </span>,
+              ],
             ]}
           />
         )}

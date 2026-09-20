@@ -26,9 +26,9 @@ def full_kit(tempo: float = 142.0) -> FlpSpec:
         tempo=tempo,
         ppq=PPQ,
         channels=[
-            ChannelSpec("Kick", 1, "D:/Drums/Kick_01.wav"),
-            ChannelSpec("Snare", 2, "D:/Drums/Snare21.wav"),
-            ChannelSpec("ClosedHat", 3, "D:/Drums/HH_closed.wav"),
+            ChannelSpec("Kick", 1, "D:\\Drums\\Kick_01.wav"),
+            ChannelSpec("Snare", 2, "D:\\Drums\\Snare21.wav"),
+            ChannelSpec("ClosedHat", 3, "D:\\Drums\\HH_closed.wav"),
             ChannelSpec("808 Bass", 4, kind=TYPE_NATIVE),
             ChannelSpec("Rhodes Chords", 5, kind=TYPE_NATIVE),
             ChannelSpec("Lead Melody", 6, kind=TYPE_NATIVE),

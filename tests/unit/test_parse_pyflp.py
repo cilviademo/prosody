@@ -126,12 +126,12 @@ def test_samples_are_resolved_against_the_filesystem(backend, make_flp, tmp_path
     spec = one_pattern_loop()
     spec.channels = [
         ChannelSpec(name="Kick", sample_path=str(real)),
-        ChannelSpec(name="Snare", sample_path="Z:/nope/Snare.wav"),
+        ChannelSpec(name="Snare", sample_path="Z:\\nope\\Snare.wav"),
     ]
     project = backend.parse(make_flp(spec))
     found = {s.path: s.found for s in project.samples}
     assert found[str(real)] is True
-    assert found["Z:/nope/Snare.wav"] is False
+    assert found["Z:\\nope\\Snare.wav"] is False
 
 
 def test_missing_sample_fixture(backend, make_flp):
@@ -197,3 +197,21 @@ def test_every_named_fixture_parses(backend, all_fixture_flps):
         project = backend.parse(path)
         assert project.id, name
         assert project.fl_version, name
+
+
+def test_a_windows_sample_path_survives_parsing_byte_for_byte(backend, make_flp):
+    """FL writes native Windows paths; the report must echo what it stored.
+
+    PyFLP hands back a pathlib.Path, and str() on a Path renders the *host's*
+    separators. A fixture written with forward slashes therefore came back as
+    'D:/Drums/Kick.wav' on Linux and 'D:\\Drums\\Kick.wav' on Windows — the
+    suite was green here and red on the Windows runner. The invariant worth
+    asserting is not a separator style but that nothing is rewritten.
+    """
+    stored = "D:\\Samples\\Kits\\909\\Kick 01.wav"
+    spec = one_pattern_loop()
+    spec.channels = [ChannelSpec(name="Kick", sample_path=stored)]
+    project = backend.parse(make_flp(spec))
+
+    assert [s.path for s in project.samples] == [stored]
+    assert project.channels[0].sample_path == stored

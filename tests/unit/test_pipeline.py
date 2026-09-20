@@ -62,7 +62,7 @@ def test_written_project_json_round_trips_through_the_model(make_flp, tmp_path):
 def test_missing_files_report_lists_unresolved_samples(make_flp, tmp_path):
     result = inspect_project(make_flp(multi_pattern_loop()), out_root=tmp_path / "out")
     listed = (result.out_dir / "REPORTS" / "missing-files.txt").read_text().split()
-    assert listed == ["D:/Drums/Kick.wav"]
+    assert listed == ["D:\\Drums\\Kick.wav"]
 
 
 def test_a_source_mutated_mid_run_fails_the_run(make_flp, tmp_path, monkeypatch):

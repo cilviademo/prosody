@@ -267,7 +267,7 @@ def multi_pattern_loop() -> FlpSpec:
         tempo=92.0,
         ppq=ppq,
         channels=[
-            ChannelSpec(name="Kick", mixer_track=1, sample_path="D:/Drums/Kick.wav"),
+            ChannelSpec(name="Kick", mixer_track=1, sample_path="D:\\Drums\\Kick.wav"),
             ChannelSpec(name="Rhodes Chords", mixer_track=2, kind=TYPE_NATIVE),
         ],
         patterns=[
@@ -291,7 +291,7 @@ def missing_sample_project() -> FlpSpec:
         ChannelSpec(
             name="Snare",
             mixer_track=2,
-            sample_path="Z:/definitely/not/here/Snare21.wav",
+            sample_path="Z:\\definitely\\not\\here\\Snare21.wav",
         )
     ]
     return spec

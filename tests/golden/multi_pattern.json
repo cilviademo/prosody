@@ -18,7 +18,7 @@
       "name": "Kick",
       "kind": "sampler",
       "plugin": null,
-      "sample_path": "D:/Drums/Kick.wav",
+      "sample_path": "D:\\Drums\\Kick.wav",
       "mixer_track": 1,
       "enabled": true
     },
@@ -331,7 +331,7 @@
   ],
   "samples": [
     {
-      "path": "D:/Drums/Kick.wav",
+      "path": "D:\\Drums\\Kick.wav",
       "found": false,
       "used_by_channels": [
         0

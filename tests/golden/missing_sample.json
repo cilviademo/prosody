@@ -18,7 +18,7 @@
       "name": "Snare",
       "kind": "sampler",
       "plugin": null,
-      "sample_path": "Z:/definitely/not/here/Snare21.wav",
+      "sample_path": "Z:\\definitely\\not\\here\\Snare21.wav",
       "mixer_track": 2,
       "enabled": true
     }
@@ -200,7 +200,7 @@
   ],
   "samples": [
     {
-      "path": "Z:/definitely/not/here/Snare21.wav",
+      "path": "Z:\\definitely\\not\\here\\Snare21.wav",
       "found": false,
       "used_by_channels": [
         0
