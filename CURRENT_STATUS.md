@@ -23,6 +23,55 @@ Windows.
 
 ---
 
+## HARDENING acceptance gate
+
+HARDENING.md defines FIRST-RUN READY as fourteen conditions passing **on the
+release artifact, in a second Windows account or a Sandbox**. Six of them
+cannot be answered from a Linux container, so the honest verdict is
+**NOT FIRST-RUN READY** — not because something is known broken, but because
+six conditions are unverified and this document does not mark unverified
+conditions as passed.
+
+| # | Condition | State |
+| --- | --- | --- |
+| 1 | Starts from a folder outside the repo, second account, no dev tools | NOT RUN — needs Windows |
+| 2 | No global Python, Node, Git or GitHub needed | ENFORCED IN CODE — the run-from-source path is `#[cfg(debug_assertions)]` and absent from a release; a test asserts it |
+| 3 | WebView2 handled | CONFIGURED — installer now uses `offlineInstaller`; the portable build detects and explains. NOT OBSERVED |
+| 4 | Core starts, hash matches build-info | VERIFIED — the published v0.1.0 core's SHA-256 equals the value in its `build-info.json`, checked against the downloaded artifact |
+| 5 | Workspace and DB initialise; System Check has no FAIL | VERIFIED HERE, not on Windows |
+| 6 | Source read-only safeguards pass their tests | VERIFIED — 18 tests, including a hard-link identity case and a write-over-source attempt that leaves the bytes unchanged |
+| 7 | FL detection correct with FL present and absent | HALF — absent is covered; present needs the studio PC |
+| 8 | One real `.flp` analyses; a plan generates offline | NOT RUN — no real project has ever been parsed |
+| 9 | Derivative reaches STRUCTURALLY_VALIDATED or shows the fallback | VERIFIED on fixtures |
+| 10 | Source hash unchanged after every operation | VERIFIED — checked before and after, with a mid-run edit caught |
+| 11 | Outputs and Library survive restart | VERIFIED HERE via the rebuild path |
+| 12 | Offline first run works | VERIFIED — a full build runs with every socket entry point replaced by a landmine |
+| 13 | Logs and the sanitized report contain no secrets | VERIFIED — a planted key appears in neither |
+| 14 | Downloaded-ZIP path with Mark-of-the-Web intact | NOT RUN — needs a browser download on Windows |
+
+`test/sandbox/prosody.wsb` and `test/sandbox/README.md` ship the harness for
+1, 3, 7 and 14. Results belong in `docs/evidence/<date>/`, which is empty.
+
+## NOT DONE from HARDENING, with reasons
+
+- **P1.2 independent parser (flpdiff).** Not bundled. Its licence has not been
+  verified from its own LICENSE file, and shipping a JavaScript parser needs
+  either the webview or a second sidecar. `SEMANTICALLY_VALIDATED` is therefore
+  unreachable; `validation.json` records that in `level_detail` rather than
+  inflating the level, which is option 3 in HARDENING P1.2.
+- **numpy, soundfile, ffmpeg not bundled** (P0.1 lists them). Nothing imports
+  them: FL Studio encodes MP3 itself and the preview stitcher does not exist.
+  Bundling them would add tens of megabytes of unused DLLs and, for ffmpeg, a
+  licence question for no capability. `prosody-core.spec` says how to add them
+  back when `preview/stitch.py` lands.
+- **P1.6 sample and plugin states** beyond AVAILABLE/MISSING. RELOCATED and
+  FAILED_IN_RENDER are not implemented.
+- **P2.3 signing.** `digestAlgorithm` and `timestampUrl` are set and
+  `certificateThumbprint` is deliberately null. No certificate exists, and none
+  should be self-signed.
+- **A CycloneDX SBOM.** `licenses/THIRD-PARTY.md` is the stated minimum and is
+  complete, with bundled/not-bundled and purpose per component.
+
 ## WORKING
 
 Verified by running it here, on Linux, against synthetic projects.

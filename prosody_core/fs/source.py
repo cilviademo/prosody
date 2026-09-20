@@ -41,6 +41,39 @@ class SourceChanged(RuntimeError):
     """A source file changed underneath a run."""
 
 
+#: Windows applies MAX_PATH to most calls unless a path is given in extended
+#: form. 240 rather than 260 leaves room for a filename to be appended.
+LONG_PATH_THRESHOLD = 240
+
+
+def long_path(path: Path) -> Path:
+    r"""Prefix with ``\\?\`` when a Windows path is long enough to need it.
+
+    Documents inside a OneDrive folder, a deep project tree and a versioned
+    export folder add up faster than they look, and the failure mode is a
+    "file not found" on a file the user can see in Explorer (HARDENING P2.4).
+
+    The prefix only works on a fully qualified, non-relative path with no
+    forward slashes, so this resolves first and declines rather than producing
+    something subtly wrong.
+    """
+    if os.name != "nt":
+        return path
+    text = str(path)
+    if text.startswith("\\\\?\\"):
+        return path
+    try:
+        resolved = str(Path(path).resolve())
+    except OSError:
+        return path
+    if len(resolved) < LONG_PATH_THRESHOLD:
+        return Path(resolved)
+    if resolved.startswith("\\\\"):
+        # A UNC path takes a different prefix: \\?\UNC\server\share\...
+        return Path("\\\\?\\UNC" + resolved[1:])
+    return Path("\\\\?\\" + resolved)
+
+
 def file_identity(path: Path) -> tuple[int, int] | None:
     """``(device, inode)`` — what actually identifies a file to the OS.
 
@@ -183,6 +216,9 @@ def atomic_write(destination: Path, data: bytes, *, source: Path | None = None) 
         assert_not_the_source(destination, source)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
+    # Both names go through the extended-path form together, so the rename
+    # stays on one volume and neither side trips MAX_PATH.
+    destination = long_path(destination)
     partial = destination.with_name(f"{destination.name}.{uuid.uuid4().hex[:8]}.partial")
     try:
         with open(partial, "wb") as handle:

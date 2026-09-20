@@ -25,6 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]" ruff
 
+      # Lockfile drift (HARDENING P2.7) is already asserted by
+      # tests/unit/test_boundaries.py — test_every_imported_package_is_a_required_dependency
+      # and test_pinned_requirements_cover_the_required_dependencies — which is
+      # the check that caught the mido bug. It runs in the Test step below, so
+      # there is no separate CI step duplicating it.
       - name: Lint
         run: ruff check prosody_core tests
 

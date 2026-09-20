@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows Sandbox configuration for a genuine first-run test (HARDENING P2.5).
+
+  A Sandbox is the cheapest approximation of a fresh machine that exists on a
+  PC you already own: no Python, no Node, no Rust, no Git, no FL Studio, and
+  no guarantee of WebView2. That last point is the valuable one — it is the
+  only easy way to see what a user without the Edge runtime actually gets.
+
+  Requires Windows 10/11 Pro or Enterprise. Enable it once:
+    Settings > Optional features > More Windows features > Windows Sandbox
+
+  Then:
+    1. Extract Prosody-v0.1.0-Windows.zip to the folder named below.
+    2. Double-click this file.
+    3. The Sandbox starts and opens that folder, read-only.
+    4. Copy it to the desktop inside the Sandbox and run Prosody.exe there —
+       Prosody needs somewhere writable, and the mapped folder is not.
+
+  What to record in docs/evidence/<date>/:
+    * whether a WebView2 message box appeared, and its exact wording
+    * whether Prosody opened a window at all
+    * the System Check output (Settings > System check > Copy report)
+    * that FL Studio reads UNAVAILABLE rather than FAIL, since none is installed
+
+  Edit HostFolder below to wherever the extracted release actually is.
+-->
+<Configuration>
+  <VGpu>Disable</VGpu>
+
+  <!-- Networking off by default: a first run must work with no connection,
+       and this proves it rather than assuming it (acceptance gate 12). Set to
+       Default if you want to test the installer's WebView2 download path. -->
+  <Networking>Disable</Networking>
+
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\Temp\prosody-test</HostFolder>
+      <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\prosody-release</SandboxFolder>
+      <!-- Read-only so the test cannot accidentally modify the artefact, and
+           so a write attempt into the release folder shows up as a failure. -->
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+
+  <LogonCommand>
+    <Command>explorer.exe C:\Users\WDAGUtilityAccount\Desktop\prosody-release</Command>
+  </LogonCommand>
+</Configuration>

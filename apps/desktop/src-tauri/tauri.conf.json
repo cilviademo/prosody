@@ -43,8 +43,10 @@
         "installMode": "currentUser"
       },
       "webviewInstallMode": {
-        "type": "embedBootstrapper"
-      }
+        "type": "offlineInstaller"
+      },
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com"
     },
     "resources": {
       "resources/prosody-core": "resources/prosody-core"
