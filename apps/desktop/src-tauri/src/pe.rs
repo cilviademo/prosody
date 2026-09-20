@@ -10,6 +10,11 @@
 //! It is also the cheapest way to catch a 32-bit `FL64.exe` that is really
 //! `FL.exe` renamed, which would fail far later and more confusingly.
 
+// Only a Windows build calls any of this — a PE header is a Windows concept —
+// but the tests below are worth running on every platform, so the module is
+// compiled everywhere rather than hidden behind #[cfg(windows)].
+#![cfg_attr(not(windows), allow(dead_code))]
+
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;

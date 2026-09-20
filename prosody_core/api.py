@@ -294,6 +294,51 @@ def h_genres(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     return {"genres": out}
 
 
+#: A project far larger than any real one is a sign the path is not what the
+#: user thinks it is. FL projects are kilobytes to low megabytes; 200 MB is
+#: generous by two orders of magnitude (HARDENING P0.6).
+MAX_SOURCE_BYTES = 200 * 1024 * 1024
+
+
+def validate_source_path(path: Path) -> Path:
+    """Check a path handed in from outside before anything opens it.
+
+    Paths reach here from a drag-and-drop, a file dialog and the Library, and
+    a dropped path is untrusted input: the user may have dropped a folder, a
+    shortcut, a 4 GB WAV, or something that vanished between the drop and the
+    read.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"{path} does not exist")
+    if path.is_dir():
+        raise ValueError(f"{path.name} is a folder. Drop a single .flp file.")
+    if not path.is_file():
+        raise ValueError(f"{path.name} is not a file.")
+    if path.suffix.lower() != ".flp":
+        raise ValueError(f"{path.name} is not an .flp file.")
+
+    size = path.stat().st_size
+    if size == 0:
+        raise ValueError(f"{path.name} is empty.")
+    if size > MAX_SOURCE_BYTES:
+        raise ValueError(
+            f"{path.name} is {size / 1024 / 1024:.0f} MB. That is far larger "
+            "than any FL Studio project; Prosody will not open it."
+        )
+
+    # Existence is not readability: a file on a disconnected network share, or
+    # one another program holds exclusively, fails here rather than midway
+    # through a parse.
+    try:
+        with path.open("rb") as handle:
+            handle.read(4)
+    except OSError as exc:
+        raise ValueError(f"{path.name} could not be read: {exc}") from exc
+
+    return path
+
+
 def _working_copy(workspace: Workspace, path: Path) -> WorkingCopy:
     """Take a private copy before anything parses the user's file.
 
@@ -317,17 +362,12 @@ def _parse_original(backend: PyFLPBackend, copy_path: Path, original: Path) -> B
 
 
 def h_inspect(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
-    path = Path(payload["path"])
-    if not path.is_file():
-        raise FileNotFoundError(f"{path} does not exist")
-    if path.suffix.lower() != ".flp":
-        raise ValueError(f"{path.name} is not an .flp file")
-    return _project_payload(path, workspace)
+    return _project_payload(validate_source_path(Path(payload["path"])), workspace)
 
 
 def h_plan(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     """Generate an arrangement plan for preview. Writes nothing."""
-    path = Path(payload["path"])
+    path = validate_source_path(Path(payload["path"]))
     backend = PyFLPBackend()
     with temporary_copy(path, workspace.cache) as copy:
         project = _parse_original(backend, copy.path, path)
@@ -391,9 +431,7 @@ def h_plan(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
 
 
 def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
-    path = Path(payload["path"])
-    if not path.is_file():
-        raise FileNotFoundError(f"{path} does not exist")
+    path = validate_source_path(Path(payload["path"]))
     settings = workspace.load_settings()
     export_root = Path(
         payload.get("exportRoot") or settings.get("export_root") or workspace.exports

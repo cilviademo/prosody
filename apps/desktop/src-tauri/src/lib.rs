@@ -161,30 +161,12 @@ fn reveal(path: String) -> Result<(), String> {
         return Err(format!("{path} no longer exists."));
     }
 
-    #[cfg(windows)]
-    {
-        let mut command = Command::new("explorer");
-        if target.is_file() {
-            command.arg("/select,").arg(&target);
-        } else {
-            command.arg(&target);
-        }
-        command.creation_flags(CREATE_NO_WINDOW);
-        command.spawn().map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-
-    // Only Explorer can select a file inside its folder, so Windows keeps a
-    // direct spawn of a known system binary. Elsewhere the opener plugin does
-    // it without going near a shell.
-    #[cfg(not(windows))]
-    {
-        let dir = if target.is_file() {
-            target.parent().unwrap_or(&target).to_path_buf()
-        } else {
-            target.clone()
-        };
-        opener::open_path(dir.to_string_lossy().to_string(), None::<&str>)
+    // The plugin selects the file inside its folder on Windows and does the
+    // equivalent elsewhere, without this process spawning anything itself.
+    if target.is_file() {
+        opener::reveal_item_in_dir(&target).map_err(|e| e.to_string())
+    } else {
+        opener::open_path(target.to_string_lossy().to_string(), None::<&str>)
             .map_err(|e| e.to_string())
     }
 }

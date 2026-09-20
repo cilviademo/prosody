@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Prosody desktop capabilities",
+  "description": "Prosody desktop capabilities. Every privileged action \u2014 spawning the core, spawning FL Studio, reading a render back, opening a folder \u2014 is a Rust command that validates its own arguments. The webview is granted no shell permission, no filesystem permission, and no arbitrary-path opener permission (HARDENING P0.6).",
   "windows": [
     "main"
   ],
@@ -10,7 +10,6 @@
     "core:event:default",
     "core:window:allow-start-dragging",
     "dialog:default",
-    "opener:default",
-    "opener:allow-open-path"
+    "opener:default"
   ]
 }
