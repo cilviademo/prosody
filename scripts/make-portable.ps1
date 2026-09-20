@@ -40,7 +40,10 @@ if (-not (Test-Path $exe)) {
 
 $core = Join-Path $tauri "resources\prosody-core\prosody-core.exe"
 if (-not (Test-Path $core)) {
-    throw "The core was not built. Run 'python -m PyInstaller prosody-core.spec' first."
+    throw ("The core was not built. Run:`n" +
+           "  python -m PyInstaller prosody-core.spec --noconfirm`n" +
+           "then copy dist\prosody-core\* into $tauri\resources\prosody-core\" +
+           "`n(scripts\build-release.ps1 does all of this for you.)")
 }
 
 $dist = Join-Path $repo "dist\Prosody"
@@ -120,6 +123,20 @@ OFFLINE
   and would only ever receive numbers and role names.
 "@ | Set-Content (Join-Path $dist "README.txt") -Encoding UTF8
 
+# Verify by running the assembled copy, not by trusting the layout. A
+# packaging mistake caught here is a failed build; caught later it is a user
+# staring at a Diagnostics screen.
+Write-Host "Verifying the assembled layout..." -ForegroundColor Cyan
+$distCore = Join-Path $dist "resources\prosody-core\prosody-core.exe"
+if (-not (Test-Path $distCore)) {
+    throw "the core is not at $distCore - the portable layout is wrong"
+}
+$reply = '{"id":1,"method":"ping"}' | & $distCore
+if ($reply -notmatch '"ok":\s*true') {
+    throw "the core in the portable layout did not answer ping: $reply"
+}
+Write-Host "   core: $reply" -ForegroundColor DarkGray
+
 $zip = Join-Path $out "Prosody-v$Version-Windows.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Write-Host "Compressing $zip ..." -ForegroundColor Cyan
@@ -130,6 +147,26 @@ $sums = Join-Path $out "SHA256SUMS.txt"
 Get-ChildItem $out -File | Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
     ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash, $_.Name } |
     Set-Content $sums -Encoding UTF8
+
+# And verify the ZIP itself, extracted somewhere else entirely. This is the
+# artefact the user actually downloads.
+Write-Host "Verifying the extracted ZIP..." -ForegroundColor Cyan
+$check = Join-Path ([System.IO.Path]::GetTempPath()) ("prosody-ziptest-" + [guid]::NewGuid())
+Expand-Archive -Path $zip -DestinationPath $check -Force
+$zipExe  = Join-Path $check "Prosody\Prosody.exe"
+$zipCore = Join-Path $check "Prosody\resources\prosody-core\prosody-core.exe"
+foreach ($required in @($zipExe, $zipCore)) {
+    if (-not (Test-Path $required)) {
+        Remove-Item $check -Recurse -Force -ErrorAction SilentlyContinue
+        throw "missing from the ZIP: $required"
+    }
+}
+$reply = '{"id":1,"method":"ping"}' | & $zipCore
+Remove-Item $check -Recurse -Force -ErrorAction SilentlyContinue
+if ($reply -notmatch '"ok":\s*true') {
+    throw "the core inside the ZIP did not answer ping: $reply"
+}
+Write-Host "   extracted core: $reply" -ForegroundColor DarkGray
 
 Write-Host ""
 Write-Host "Portable ZIP : $zip" -ForegroundColor Green

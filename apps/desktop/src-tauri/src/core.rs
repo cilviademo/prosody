@@ -209,7 +209,8 @@ struct Launch {
 impl Launch {
     fn resolve(resource_dir: Option<PathBuf>) -> Result<Self, String> {
         // A release always ships the frozen core beside the executable.
-        if let Some(found) = packaged_core(resource_dir.as_deref()) {
+        let (found, tried) = packaged_core(resource_dir.as_deref());
+        if let Some(found) = found {
             let bin_dir = found.parent().and_then(|p| p.parent()).map(|p| p.join("bin"));
             return Ok(Launch {
                 program: found,
@@ -221,9 +222,17 @@ impl Launch {
 
         // Development: run the package straight from the repository.
         let root = repo_root().ok_or_else(|| {
-            "Could not find the Prosody core. A packaged build ships it under \
-             resources/prosody-core; a development build needs the repository."
-                .to_string()
+            let searched = tried
+                .iter()
+                .map(|p| format!("  {}", p.display()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "Could not find the Prosody core.\n\nA packaged build ships it \
+                 under resources/prosody-core; a development build runs it from \
+                 the repository. Looked in:\n{searched}\n\nSet PROSODY_CORE_EXE \
+                 to the executable to override this search."
+            )
         })?;
         let python = interpreter(&root).ok_or_else(|| {
             format!(
@@ -245,8 +254,8 @@ fn core_exe_name() -> &'static str {
     if cfg!(windows) { "prosody-core.exe" } else { "prosody-core" }
 }
 
-/// `resources/prosody-core/prosody-core[.exe]`, next to the app or in resources.
-fn packaged_core(resource_dir: Option<&Path>) -> Option<PathBuf> {
+/// Roots the packaged core could live under, most likely first.
+fn resource_roots(resource_dir: Option<&Path>) -> Vec<PathBuf> {
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Some(dir) = resource_dir {
         roots.push(dir.to_path_buf());
@@ -254,14 +263,85 @@ fn packaged_core(resource_dir: Option<&Path>) -> Option<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             roots.push(parent.to_path_buf());
+            // NSIS installs put resources beside the executable; some layouts
+            // nest the binary one level deeper.
+            if let Some(grandparent) = parent.parent() {
+                roots.push(grandparent.to_path_buf());
+            }
         }
     }
-    for root in roots {
-        for relative in ["resources/prosody-core", "prosody-core"] {
-            let candidate = root.join(relative).join(core_exe_name());
+    roots.dedup();
+    roots
+}
+
+/// Find the packaged core, recording every path tried.
+///
+/// Tauri's placement of a *directory* resource has differed between versions,
+/// and this cannot be tested from a non-Windows machine — so rather than
+/// betting on one layout, try the plausible ones and then search. Returning
+/// the attempted paths matters as much as finding the file: "could not find
+/// the core" with no list is the least actionable error a packaged app can
+/// give.
+fn packaged_core(resource_dir: Option<&Path>) -> (Option<PathBuf>, Vec<PathBuf>) {
+    let mut tried: Vec<PathBuf> = Vec::new();
+    let exe_name = core_exe_name();
+
+    // An explicit override always wins; it is the escape hatch when a layout
+    // surprises us in the field.
+    if let Ok(explicit) = std::env::var("PROSODY_CORE_EXE") {
+        let candidate = PathBuf::from(explicit);
+        tried.push(candidate.clone());
+        if candidate.is_file() {
+            return (Some(candidate), tried);
+        }
+    }
+
+    let relatives = [
+        "resources/prosody-core",
+        "prosody-core",
+        "resources/prosody-core/prosody-core",
+        "resources",
+    ];
+
+    for root in resource_roots(resource_dir) {
+        for relative in relatives {
+            let candidate = root.join(relative).join(exe_name);
+            tried.push(candidate.clone());
             if candidate.is_file() {
-                return Some(candidate);
+                return (Some(candidate), tried);
             }
+        }
+        // Last resort: a shallow search. Cheap, bounded, and it turns a
+        // packaging mistake into a working app instead of a support thread.
+        if let Some(found) = search_for(&root, exe_name, 3) {
+            return (Some(found), tried);
+        }
+    }
+    (None, tried)
+}
+
+/// Depth-limited search for `name` beneath `root`.
+fn search_for(root: &Path, name: &str, depth: usize) -> Option<PathBuf> {
+    if depth == 0 {
+        return None;
+    }
+    let entries = std::fs::read_dir(root).ok()?;
+    let mut directories: Vec<PathBuf> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        match entry.file_type() {
+            Ok(kind) if kind.is_file() => {
+                if path.file_name().and_then(|n| n.to_str()) == Some(name) {
+                    return Some(path);
+                }
+            }
+            Ok(kind) if kind.is_dir() => directories.push(path),
+            _ => {}
+        }
+    }
+    for directory in directories {
+        if let Some(found) = search_for(&directory, name, depth - 1) {
+            return Some(found);
         }
     }
     None
