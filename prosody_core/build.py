@@ -27,6 +27,7 @@ from prosody_core.extract import stems as stems_module
 from prosody_core.extract.midi import write_role_midi
 from prosody_core.extract.package import package_project
 from prosody_core.fs.safety import sha256_file, slugify, versioned_path
+from prosody_core.fs.source import SourceChanged, working_copy
 from prosody_core.health.check import check_project, classify_state, human_status
 from prosody_core.model.schemas import (
     Analysis,
@@ -136,6 +137,7 @@ def build(
     analysis: Analysis | None = None,
     env: Environment | None = None,
     progress: ProgressFn | None = None,
+    cache_root: Path | None = None,
 ) -> BuildResult:
     """Run a full build. Always returns a result; never raises for user input."""
     source = Path(source)
@@ -153,10 +155,20 @@ def build(
 
     source_hash = sha256_file(source)
 
+    # Work from a private copy. Every stage below reads `working`, so nothing
+    # downstream can reach the user's file even by mistake — and a source that
+    # FL Studio currently has open is still a stable set of bytes to parse
+    # (HARDENING P0.3).
+    try:
+        copy = working_copy(source, cache_root or (export_root.parent / "Cache"))
+        working = copy.path
+    except (OSError, SourceChanged) as exc:
+        raise SourceChanged(f"could not take a working copy of {source}: {exc}") from exc
+
     # -- parse ------------------------------------------------------------- #
     recorder.begin("Preparing project")
     if project is None:
-        project = backend.parse(source)
+        project = backend.parse(working)
     if analysis is None:
         analysis = analyse_project(project, classify_state(project))
     health = check_project(project)
@@ -216,7 +228,9 @@ def build(
             recorder.begin("Writing FL Studio project")
             destination = out_dir / f"{artifact_stem}.flp"
             try:
-                report = write_arrangement(source, destination, plan, project)
+                report = write_arrangement(
+                    working, destination, plan, project, protect=source,
+                )
                 result = validate_derivative(
                     source, destination, project, plan, backend,
                     source_hash=source_hash,

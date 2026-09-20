@@ -31,6 +31,7 @@ from prosody_core.env import describe
 from prosody_core.extract import render_fl
 from prosody_core.extract import stems as stems_module
 from prosody_core.fs.safety import sha256_file
+from prosody_core.fs.source import WorkingCopy, temporary_copy, working_copy
 from prosody_core.health.check import check_project, classify_state, human_status
 from prosody_core.index import db
 from prosody_core.model.roles import Role
@@ -119,7 +120,10 @@ def guess_key(project: BeatProject) -> tuple[str | None, float]:
 
 def _project_payload(path: Path, workspace: Workspace) -> dict[str, Any]:
     backend = PyFLPBackend()
-    project = backend.parse(path)
+    # Read a copy, never the user's file, and do not leave it behind: an
+    # inspection produces no output (HARDENING P0.3).
+    with temporary_copy(path, workspace.cache) as copy:
+        project = _parse_original(backend, copy.path, path)
     analysis = analyse_project(project, classify_state(project))
     health = check_project(project)
     key, key_confidence = guess_key(project)
@@ -290,6 +294,28 @@ def h_genres(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     return {"genres": out}
 
 
+def _working_copy(workspace: Workspace, path: Path) -> WorkingCopy:
+    """Take a private copy before anything parses the user's file.
+
+    Copy-on-analyze is only a guarantee if it happens at the boundary. Doing
+    it inside build() left the API layer parsing the original directly, which
+    a test caught (HARDENING P0.3).
+    """
+    return working_copy(path, workspace.cache)
+
+
+def _parse_original(backend: PyFLPBackend, copy_path: Path, original: Path) -> BeatProject:
+    """Parse a working copy but record the user's path, not the cache path.
+
+    The backend names whatever file it was handed, so parsing a copy would
+    otherwise write a path under Cache/jobs into every export's project.json
+    — a path that stops existing as soon as the cache is cleared, breaking the
+    Library's "source still there?" check and any rebuild from disk.
+    """
+    project = backend.parse(copy_path)
+    return project.model_copy(update={"source_path": str(original)})
+
+
 def h_inspect(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     path = Path(payload["path"])
     if not path.is_file():
@@ -303,7 +329,8 @@ def h_plan(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     """Generate an arrangement plan for preview. Writes nothing."""
     path = Path(payload["path"])
     backend = PyFLPBackend()
-    project = backend.parse(path)
+    with temporary_copy(path, workspace.cache) as copy:
+        project = _parse_original(backend, copy.path, path)
     analysis = analyse_project(project, classify_state(project))
     level = PermissionLevel(int(payload.get("level", 0)))
 
@@ -394,7 +421,8 @@ def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     # parse, and it guarantees the library row exists before a build references
     # it, whether or not the user inspected the project first.
     backend = PyFLPBackend()
-    project = backend.parse(path)
+    copy = _working_copy(workspace, path)
+    project = _parse_original(backend, copy.path, path)
     analysis = analyse_project(project, classify_state(project))
     health = check_project(project)
     key, _ = guess_key(project)

@@ -18,6 +18,8 @@ import struct
 from dataclasses import dataclass
 from pathlib import Path
 
+from prosody_core.fs.source import atomic_write
+
 FLP_HEADER = struct.Struct("4sIh2H")
 HEADER_SIZE = FLP_HEADER.size  # 14
 DATA_HEADER_SIZE = 8           # "FLdt" + u32
@@ -152,11 +154,13 @@ def read_flp(path: Path) -> FLPFile:
     return FLPFile(header=header, events=events)
 
 
-def write_flp(flp: FLPFile, path: Path) -> Path:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(flp.to_bytes())
-    return path
+def write_flp(flp: FLPFile, path: Path, *, source: Path | None = None) -> Path:
+    """Write a project atomically (HARDENING P0.4).
+
+    Passing ``source`` also refuses a destination that resolves to the user's
+    original, whatever it is spelled as.
+    """
+    return atomic_write(Path(path), flp.to_bytes(), source=source)
 
 
 def diff_events(before: FLPFile, after: FLPFile) -> list[str]:

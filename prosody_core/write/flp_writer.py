@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from prosody_core.arrange.permissions import assert_plan_allowed
+from prosody_core.fs.source import assert_not_the_source
 from prosody_core.model.schemas import ArrangementPlan, BeatProject, PermissionLevel
 from prosody_core.write.eventstream import Event, FLPFile, read_flp, write_flp
 
@@ -231,15 +232,27 @@ def write_arrangement(
     project: BeatProject,
     *,
     markers: bool = True,
+    protect: Path | None = None,
 ) -> WriteReport:
     """Produce a derivative .flp with the planned playlist.
+
+    ``source`` is the file to read, which is normally a working copy in the
+    cache. ``protect`` is the user's real original, which the destination is
+    checked against — before anything is written, not after.
 
     Raises:
         WriteUnsupported: the project cannot be rewritten safely.
         PermissionDenied: the plan exceeds its creative level.
+        SourceWouldBeModified: the destination resolves to a protected file.
     """
     # Second permission gate, immediately before any bytes are produced.
     assert_plan_allowed(plan)
+
+    # Checked here, at the start, because a check after the write protects
+    # nothing (HARDENING P0.3).
+    assert_not_the_source(destination, Path(source))
+    if protect is not None:
+        assert_not_the_source(destination, Path(protect))
 
     flp = read_flp(source)
     report = WriteReport(output=Path(destination))
@@ -296,7 +309,8 @@ def write_arrangement(
         except Exception as exc:  # noqa: BLE001 - markers are optional
             report.warnings.append(f"section markers not written: {exc}")
 
-    write_flp(flp, Path(destination))
+    # Final gate inside the writer itself, so no caller can bypass it.
+    write_flp(flp, Path(destination), source=Path(protect or source))
     report.log(f"SAVE path={destination} clips={len(clips)}")
     return report
 
