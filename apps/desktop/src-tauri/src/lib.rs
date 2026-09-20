@@ -34,6 +34,15 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+/// Matches `tauri.conf.json`'s `minWidth`/`minHeight`. A restored size below
+/// these would be overridden by the window manager anyway.
+const MIN_WIDTH: f64 = 860.0;
+const MIN_HEIGHT: f64 = 600.0;
+
+/// How much of the window must land on a real monitor for the saved position
+/// to be usable — roughly a grabbable piece of title bar.
+const TITLE_BAR_GRAB: f64 = 80.0;
+
 /// Everything the window needs, resolved once at startup.
 struct AppState {
     paths: Paths,
@@ -229,6 +238,57 @@ fn read_media(path: String) -> Result<Vec<u8>, String> {
     std::fs::read(&target).map_err(|e| e.to_string())
 }
 
+/// Put the window back where it was left, if that is still somewhere visible.
+///
+/// A saved position becomes a trap the moment the monitor it referred to is
+/// unplugged, the laptop is undocked, or the display scale changes: Windows
+/// will happily place a window at x=3000 on a machine that now has one screen,
+/// and the app looks like it failed to start. So the geometry is only applied
+/// after checking it against the monitors that exist *now*.
+fn restore_window(window: &tauri::WebviewWindow, saved: &Value) {
+    use tauri::{LogicalPosition, LogicalSize};
+
+    let Some(geometry) = saved.get("window") else { return };
+    let number = |key: &str| geometry.get(key).and_then(Value::as_f64);
+    let (Some(width), Some(height)) = (number("width"), number("height")) else { return };
+
+    // Never smaller than the configured minimum, and never bigger than the
+    // screen — a window restored larger than the display cannot be resized
+    // back by dragging, because its edges are off-screen.
+    let monitors = window.available_monitors().unwrap_or_default();
+    let largest = monitors
+        .iter()
+        .map(|m| {
+            let scale = m.scale_factor();
+            (m.size().width as f64 / scale, m.size().height as f64 / scale)
+        })
+        .fold((f64::MAX, f64::MAX), |acc, wh| (acc.0.min(wh.0), acc.1.min(wh.1)));
+    let (max_w, max_h) = if largest.0 == f64::MAX { (f64::MAX, f64::MAX) } else { largest };
+
+    let width = width.clamp(MIN_WIDTH, max_w);
+    let height = height.clamp(MIN_HEIGHT, max_h);
+    let _ = window.set_size(LogicalSize::new(width, height));
+
+    let (Some(x), Some(y)) = (number("x"), number("y")) else { return };
+
+    // The saved point has to land on a monitor that is still attached. A
+    // corner is not enough — a window whose title bar is off-screen cannot be
+    // moved — so require a strip of it to be reachable.
+    let visible = monitors.iter().any(|m| {
+        let scale = m.scale_factor();
+        let (mx, my) = (m.position().x as f64 / scale, m.position().y as f64 / scale);
+        let (mw, mh) = (m.size().width as f64 / scale, m.size().height as f64 / scale);
+        let overlap_w = (x + width).min(mx + mw) - x.max(mx);
+        let overlap_h = (y + height).min(my + mh) - y.max(my);
+        overlap_w >= TITLE_BAR_GRAB && overlap_h >= TITLE_BAR_GRAB
+    });
+    if visible {
+        let _ = window.set_position(LogicalPosition::new(x, y));
+    } else {
+        let _ = window.center();
+    }
+}
+
 /// Remember window geometry between sessions.
 #[tauri::command]
 async fn save_window(
@@ -268,13 +328,26 @@ pub fn run() {
 
             // 4. Start the core and ping it. A failure here is reported to the
             // UI as a diagnostics payload, never as a blank window.
-            let (core, version, error) = match Core::start(&paths, resource_dir) {
+            let (mut core, version, error) = match Core::start(&paths, resource_dir) {
                 Ok(core) => {
                     let version = core.version.clone();
                     (Some(core), version, None)
                 }
                 Err(message) => (None, String::new(), Some(message)),
             };
+
+            // 7. Put the window back where it was. Settings live in the core,
+            // so this can only happen once the core is answering; if it is
+            // not, the configured default size is the right fallback.
+            if let (Some(core), Some(window)) =
+                (core.as_mut(), app.get_webview_window("main"))
+            {
+                if let Ok(settings) =
+                    core.request(None, "settings.get", json!({}), Duration::from_secs(5))
+                {
+                    restore_window(&window, &settings);
+                }
+            }
 
             app.manage(AppState {
                 paths: paths.clone(),

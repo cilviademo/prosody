@@ -43,3 +43,26 @@ jobs:
           npm ci
           npx tsc --noEmit
           npm run build
+
+      # The Windows-only Rust — WebView2 detection, CREATE_NO_WINDOW, the
+      # registry reads — is invisible to a Linux build: cargo skips every
+      # #[cfg(windows)] block. Type-checking against the Windows target here
+      # catches a broken one in a minute instead of twenty into a release job.
+      - name: Set up Rust for the Windows target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-wincheck-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-wincheck-
+
+      - name: Type-check the Windows-only Rust
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --target x86_64-pc-windows-msvc

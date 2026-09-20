@@ -56,11 +56,19 @@ Verified by running it here, on Linux, against synthetic projects.
 
 ## PARTIAL
 
-- **The Windows build is configured but unproven.** The PyInstaller spec, the
-  NSIS config, `build-release.ps1`, `make-portable.ps1` and the CI workflow are
-  all written; the spec is proven on Linux. The Windows path has never
-  executed. **Expect the first tag build to need one fix** — a missing DLL or a
-  resource path is the usual shape.
+- **The Windows build has now run, and needed two fixes** — RELEASE.md said to
+  expect that, and it was right. The first attempt stopped at the test suite:
+  four tests that are green on Linux failed on the runner because PyFLP returns
+  a `pathlib.Path` for a sample and `str()` renders the *host's* separators, so
+  fixtures written with forward slashes came back rewritten. The fixtures were
+  wrong, not the product — FL writes backslashes, which round-trip unchanged on
+  both platforms. The second was `tauri.conf.json`'s `licenseFile`, which
+  pointed at a path that does not exist; `tauri dev` never reads it, so only
+  NSIS would ever have noticed. Both now have tests that fail without the fix.
+- **The Windows-only Rust type-checks.** `cargo check --target
+  x86_64-pc-windows-msvc` runs clean over all 18 `#[cfg(windows)]` blocks —
+  WebView2 detection, `CREATE_NO_WINDOW`, the registry reads — none of which a
+  Linux build compiles at all. CI now runs that check on every push.
 - **The release is built by a push to `main`.** This session's credentials are
   refused (HTTP 403) on tag refs and the GitHub integration lacks
   `actions: write` to dispatch a run, but ordinary branch pushes do trigger
@@ -69,9 +77,14 @@ Verified by running it here, on Linux, against synthetic projects.
   without a tag or a dispatch. Tags and **Actions → release → Run workflow**
   still work and still pin a named version.
 - **WebView2 detection** reads the Edge Update registry keys under HKLM and
-  HKCU. The logic compiles and is Windows-only, so it has not been exercised.
-- **Window geometry** is saved on resize; it is not yet restored on launch or
-  clamped to the current monitor.
+  HKCU. It compiles for Windows but has never run against a real registry.
+- **Window geometry is saved and restored.** Saved on Tauri's own move and
+  resize events rather than the DOM's `resize` alone, so a window dragged to
+  another monitor without being resized is remembered too. On launch the size
+  is clamped between the configured minimum and the smallest attached monitor,
+  and the position is only reapplied if a grabbable strip of the window still
+  lands on a monitor that exists now — otherwise it centres. Compiles for
+  Windows; the multi-monitor behaviour has not been observed running.
 - **Arrangement Pack (Tier B)** triggers correctly but has only been exercised
   by forcing it, never by a real project that defeats the writer.
 

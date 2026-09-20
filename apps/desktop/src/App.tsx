@@ -97,11 +97,17 @@ export default function App() {
     })();
   }, [loadWorkspace]);
 
-  // Remember where the window was left.
+  // Remember where the window was left. The DOM only fires `resize`, so a
+  // window that is dragged to another monitor and never resized would be
+  // restored to its old screen; Tauri's own events cover both.
   useEffect(() => {
     let timer: number | undefined;
+    let cancelled = false;
+    const unlisten: Array<() => void> = [];
+
     const remember = () => {
       window.clearTimeout(timer);
+      // Dragging emits a move event per frame; only the resting place matters.
       timer = window.setTimeout(() => {
         void saveWindow({
           width: window.outerWidth, height: window.outerHeight,
@@ -109,10 +115,25 @@ export default function App() {
         });
       }, 500);
     };
-    window.addEventListener("resize", remember);
+
+    void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const w = getCurrentWindow();
+        const off = await Promise.all([w.onMoved(remember), w.onResized(remember)]);
+        if (cancelled) off.forEach((fn) => fn());
+        else unlisten.push(...off);
+      } catch {
+        // Not running under Tauri (vite preview); the DOM listener is enough.
+        window.addEventListener("resize", remember);
+        unlisten.push(() => window.removeEventListener("resize", remember));
+      }
+    })();
+
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
-      window.removeEventListener("resize", remember);
+      unlisten.forEach((fn) => fn());
     };
   }, []);
 
