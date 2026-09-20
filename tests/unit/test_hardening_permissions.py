@@ -132,3 +132,44 @@ def test_every_handler_that_takes_a_path_validates_it():
     for name in ("h_inspect", "h_build", "h_plan"):
         source = inspect.getsource(getattr(api, name))
         assert "validate_source_path" in source, f"{name} takes a path without validating it"
+
+
+# --- P1.5: no capability claim is hardcoded in the frontend ------------------ #
+
+UI = REPO / "apps" / "desktop" / "src"
+
+
+def test_the_ui_never_hardcodes_a_reason_a_capability_is_unavailable():
+    """The backend knows why; the frontend must not guess.
+
+    "needs FL Studio" was hardcoded on the WAV and MP3 toggles, which was
+    wrong whenever the real cause was Safe Mode, a 32-bit FL, or rendering
+    simply switched off — and it sent the user to fix the wrong thing.
+    """
+    invented = [
+        '"needs FL Studio"',
+        '"unavailable"',
+        '"Requires FL Studio"',
+        '"not configured"',
+    ]
+    offenders: list[str] = []
+    for tsx in UI.rglob("*.tsx"):
+        text = tsx.read_text(encoding="utf-8")
+        for phrase in invented:
+            if phrase in text:
+                offenders.append(f"{tsx.relative_to(UI)}: {phrase}")
+    assert not offenders, (
+        "a capability reason is written into the interface instead of read "
+        "from runtime detection:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_capability_flags_the_ui_reads_all_come_from_the_environment():
+    """Each flag must exist in the environment payload, or the UI shows undefined."""
+    import inspect
+
+    from prosody_core import api
+
+    source = inspect.getsource(api.h_environment)
+    for field in ("canRender", "renderReason", "stemStrategy", "stemReason", "safeMode"):
+        assert f'"{field}"' in source, f"the UI reads {field} but the backend never sends it"

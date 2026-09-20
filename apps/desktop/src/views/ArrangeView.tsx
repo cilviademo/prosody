@@ -135,15 +135,20 @@ export function ArrangeView({
       <div style={{ marginTop: arranging ? "var(--s8)" : 0 }}>
         <Section title="Export">
           <div className="toggle-rows">
+            {/* Every reason comes from the backend's runtime detection. A
+                reason written in here was wrong whenever the real cause was
+                something else — Safe Mode, a 32-bit FL, rendering switched
+                off — and it sent the user to fix the wrong thing. A test
+                greps this folder for invented reasons (HARDENING P1.5). */}
             <Toggle on={choices.wav} onChange={() => toggle("wav")} label="WAV"
-                    disabled={!canRender} why={canRender ? undefined : "needs FL Studio"} />
+                    disabled={!canRender} why={canRender ? undefined : env?.renderReason} />
             <Toggle on={choices.mp3} onChange={() => toggle("mp3")} label="MP3 preview"
-                    disabled={!canRender} why={canRender ? undefined : "needs FL Studio"} />
+                    disabled={!canRender} why={canRender ? undefined : env?.renderReason} />
             <Toggle on={choices.midi} onChange={() => toggle("midi")} label="MIDI per role" />
             <Toggle on={choices.zip} onChange={() => toggle("zip")} label="Portable project" />
             <Toggle on={choices.stems} onChange={() => toggle("stems")} label="Mixer stems"
                     disabled={!canStem}
-                    why={canStem ? env?.stemStrategy ?? undefined : "unavailable"} />
+                    why={canStem ? env?.stemStrategy ?? undefined : env?.stemReason} />
           </div>
 
           {canRender && (choices.wav || choices.mp3 || choices.stems) && (
@@ -159,9 +164,9 @@ export function ArrangeView({
             <div className="stack-4" style={{ marginTop: "var(--s5)" }}>
               {!canRender && (
                 <Note heading="Audio is off">
-                  Set your FL Studio path in Settings and turn rendering on to
-                  produce WAV and MP3. The arranged project, MIDI and the
-                  portable package do not need it.
+                  {env?.renderReason ?? "FL Studio is not configured."} The
+                  arranged project, MIDI and the portable package do not need
+                  it.
                 </Note>
               )}
               {!canStem && canRender && (
