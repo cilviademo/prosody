@@ -181,7 +181,7 @@ def build(
         project = backend.parse(working)
     if analysis is None:
         analysis = analyse_project(project, classify_state(project))
-    health = check_project(project)
+    health = check_project(project, source=working)
     genre_tag = options.genre if options.arrange else "extract"
     out_dir = prepare_output_dir(export_root, source, genre_tag)
     # The folder name already carries the version; artefacts reuse it verbatim.
@@ -417,9 +417,16 @@ def build(
                     if kind is ArtifactKind.MP3 and preview_mp3 is None:
                         preview_mp3 = path
                     produced.append(artifact(kind, path, path.name))
+                # FL renders silence for a sample it cannot find. The file
+                # exists and plays, so it is a warning with a count, not a
+                # success and not a failure (TESTING_HANDOFF P1.5).
+                absent = len(health.missing_assets)
                 recorder.finish(
-                    "Rendering audio", StageStatus.OK,
-                    f"{len(produced)} file(s) in {result.seconds:.0f}s",
+                    "Rendering audio",
+                    StageStatus.WARNING if absent else StageStatus.OK,
+                    f"{len(produced)} file(s) in {result.seconds:.0f}s"
+                    + (f"; incomplete: {absent} sample{'s' if absent != 1 else ''} missing"
+                       if absent else ""),
                     tuple(produced),
                 )
             else:

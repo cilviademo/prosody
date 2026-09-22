@@ -217,6 +217,13 @@ is a capability gap, not a file problem.
 | 2026-09-22 | main (post-handoff) | P0.1 FL 2026 parse | FALLBACK BUILT, verified on a 2026-shaped fixture and on the reproduced exception | PyFLP failure now falls back to Prosody's own event reader, which agrees with PyFLP on every fixture; version read from the header first; raw exception under Parser notes, not the headline. **Not yet run on `loop_test.flp`** — `flpf events loop_test.flp` or Copy event inventory finishes the diagnosis |
 | 2026-09-22 | main (post-handoff) | P1.1 ready pill | FIXED | green only after a passing Test against the same executable (size+mtime fingerprint) |
 | 2026-09-22 | main (post-handoff) | P1.3 pyflp version in bundle | FIXED | `copy_metadata("pyflp")` in the spec; visible in the next release build |
+| 2026-09-22 | main (post-handoff) | P1.3 `write_compatibility` row | FIXED — answered live per file | rewrite-in-memory round-trip; byte-identical on every synthetic fixture; a verdict on a real FL file appears the first time one is inspected on the PC |
+| 2026-09-22 | main (post-handoff) | P1.3 `plugins_available` row | FIXED | asks FL's own `Plugin database\Installed`; DETECTED / UNKNOWN (never MISSING — FL is the authority); undetermined only when the database is absent |
+| 2026-09-22 | main (post-handoff) | P1.3 channel table columns | FIXED | column width from the longest name; nothing can run into the next column |
+| 2026-09-22 | main (post-handoff) | P1.4 OneDrive export folder | FIXED, verified on synthetic paths | transient lock on rename retried with backoff; portable ZIP written whole-or-not-at-all; Settings shows a one-time notice with "Use <profile>\Prosody\Exports"; default root avoids a synced Documents (shell and core apply the same rule). **Not yet tried against a syncing OneDrive** |
+| 2026-09-22 | main (post-handoff) | P1.5 missing samples | FIXED | Locate folder… searches a chosen root by filename and reports RELOCATED / MISSING candidates; nothing in the project is rewritten; a render with missing samples is a WARNING "incomplete: N samples missing", never a failure |
+| 2026-09-22 | main (post-handoff) | P1.6 audio-clip sessions | FIXED | Arrange stays disabled and says the project is audio-clip based and that arranging from playlist audio clips is planned |
+| 2026-09-22 | main (post-handoff) | P1.2 20.9 counts | OPEN — needs FL's own pattern count from the user | nothing to compare against yet |
 
 ## 7. Final response format after this handoff is worked
 

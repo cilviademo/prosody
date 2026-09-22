@@ -6,6 +6,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from prosody_core.fs.source import _replace_with_retry
 from prosody_core.model.schemas import BeatProject
 
 
@@ -27,8 +28,11 @@ def package_project(
     the user already owns.
     """
     flp = Path(flp)
-    destination = Path(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    final = Path(destination)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    # Written beside its destination and renamed into place, so a reader —
+    # or a sync client — never sees a half-written archive (HARDENING P0.4).
+    destination = final.with_name(final.name + ".partial")
 
     included = 0
     missing: list[str] = []
@@ -67,7 +71,8 @@ def package_project(
             )
             count += 1
 
+    _replace_with_retry(destination, final)
     return PackageReport(
-        path=destination, files=count, samples_included=included,
+        path=final, files=count, samples_included=included,
         samples_missing=tuple(missing),
     )

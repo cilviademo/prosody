@@ -10,6 +10,9 @@ studio PC with FL installed, so everywhere else it is honestly undetermined.
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from prosody_core.health import plugins
 from prosody_core.model.schemas import (
     BeatProject,
     HealthCheck,
@@ -19,6 +22,7 @@ from prosody_core.model.schemas import (
     ProjectState,
     Severity,
 )
+from prosody_core.validate.roundtrip import round_trip
 
 #: Human wording for each status. Raw enum names never reach a primary
 #: surface; they stay in diagnostics where the precision is wanted.
@@ -55,17 +59,28 @@ def classify_state(project: BeatProject) -> ProjectState:
 
 
 def check_project(
-    project: BeatProject, *, can_check_plugins: bool = False
+    project: BeatProject,
+    *,
+    can_check_plugins: bool = False,
+    source: Path | None = None,
+    plugin_database: Path | None = None,
 ) -> HealthReport:
-    """Compute a health report from an already-parsed project.
+    r"""Compute a health report from an already-parsed project.
 
     Args:
         project: The normalised project.
-        can_check_plugins: True only where FL Studio and the VST folders are
-            present. When False, plugin availability is reported as undetermined
-            instead of assumed.
+        can_check_plugins: Kept for callers that pass it; detection now asks
+            FL's own plugin database, so this no longer decides the row.
+        source: The file the project was parsed from (a working copy is
+            fine). With it, ``write_compatibility`` is answered for this file
+            by actually rewriting it in memory; without it the row is
+            undetermined.
+        plugin_database: FL's ``Plugin database\Installed`` folder, for tests;
+            the default is discovered from Documents.
     """
     checks: list[HealthCheck] = []
+    # Answered live for this file (TESTING_HANDOFF P1.3), not deferred forever.
+    trip = round_trip(source) if source is not None else None
     missing: list[MissingAsset] = []
 
     checks.append(
@@ -127,18 +142,29 @@ def check_project(
 
     # Plugin availability is only answerable where FL Studio and the VST folders
     # exist. Anywhere else it is undetermined, not "fine".
-    checks.append(
-        HealthCheck(
-            name="plugins_available",
-            ok=True if can_check_plugins else None,
-            detail=(
-                f"{len(project.plugins)} plugins referenced"
-                if can_check_plugins
-                else f"{len(project.plugins)} plugins referenced; availability is not "
-                     "checkable without FL Studio on this machine"
-            ),
+    verdicts = plugins.detect(tuple(p.name for p in project.plugins), plugin_database)
+    detected = [v for v in verdicts if v.state is plugins.PluginState.DETECTED]
+    unknown = [v for v in verdicts if v.state is plugins.PluginState.UNKNOWN]
+    if not verdicts:
+        plugin_ok, plugin_detail = True, "no plugins referenced"
+    elif all(v.state is plugins.PluginState.REFERENCED for v in verdicts):
+        plugin_ok = None
+        plugin_detail = (
+            f"{len(verdicts)} plugins referenced; FL's plugin database was not found "
+            "(Documents\\Image-Line\\FL Studio\\Presets\\Plugin database\\Installed)"
         )
-    )
+    elif unknown:
+        # FL is the authority: not in its database is "unknown", never missing.
+        plugin_ok = None
+        plugin_detail = (
+            f"{len(detected)} of {len(verdicts)} in FL's plugin database; not found: "
+            + ", ".join(v.name for v in unknown[:6])
+            + (" …" if len(unknown) > 6 else "")
+            + " — FL decides at render"
+        )
+    else:
+        plugin_ok, plugin_detail = True, f"all {len(verdicts)} in FL's plugin database"
+    checks.append(HealthCheck(name="plugins_available", ok=plugin_ok, detail=plugin_detail))
 
     errors = [w for w in project.parse_warnings if w.severity is Severity.ERROR]
     warnings = [w for w in project.parse_warnings if w.severity is Severity.WARNING]
@@ -159,9 +185,8 @@ def check_project(
     checks.append(
         HealthCheck(
             name="write_compatibility",
-            ok=None,
-            detail="PyFLP save round-trip unverified - Phase 0 spike T2 not yet run "
-                   "against a real corpus",
+            ok=trip.ok if trip else None,
+            detail=trip.detail if trip else "no file to round-trip",
         )
     )
 

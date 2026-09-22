@@ -42,6 +42,14 @@ does not. The writer preserves unknown events verbatim precisely so those
 survive without being understood, but "preserved byte for byte" has only been
 demonstrated against fixtures.
 
+## The writer's round-trip, per file
+
+The health row `write_compatibility` no longer says "spike not yet run". For
+every project inspected it rewrites the file in memory and compares: byte for
+byte on every synthetic fixture, and per file — ok, differs-but-complete, or
+fail — on anything real. A verdict on a project saved by FL Studio itself will
+appear in the row the first time one is inspected on the studio PC.
+
 ## How to fill a row in
 
 1. Open the project in FL Studio first and note what it contains.

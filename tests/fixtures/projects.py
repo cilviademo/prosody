@@ -125,3 +125,24 @@ def fl2026_loop() -> FlpSpec:
         ],
         track_names=["Drums", "Keys"],
     )
+
+
+def audio_clip_session() -> FlpSpec:
+    """An arrangement of audio clips and no patterns — the Tony x Eddie shape.
+
+    Playlist clips that refer to channels rather than patterns, so there is
+    nothing to arrange from, and the interface has to say why.
+    """
+    return FlpSpec(
+        title="Audio Session",
+        tempo=156.0,
+        channels=[
+            ChannelSpec("Vocal take 1", 1, "D:\\Takes\\vox1.wav"),
+            ChannelSpec("Guitar DI", 2, "D:\\Takes\\gtr.wav"),
+        ],
+        clips=[
+            ClipSpec(pattern_iid=0, track=0, start_ticks=0, length_ticks=16 * PPQ, channel_iid=0),
+            ClipSpec(pattern_iid=0, track=1, start_ticks=0, length_ticks=16 * PPQ, channel_iid=1),
+        ],
+        track_names=["Vox", "Gtr"],
+    )

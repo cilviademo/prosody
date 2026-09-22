@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type {
   BackendStatus, BuildOutcome, Env, Genre, LibraryItem, Plan, ProgressEvent,
-  InterruptedJob, Project, Settings, SystemCheck,
+  InterruptedJob, LocatedSample, Project, Settings, SystemCheck,
 } from "./types";
 
 export class BackendError extends Error {
@@ -63,6 +63,12 @@ export const api = {
   events: (path: string) =>
     call<{ report: string; flVersion: string | null; unknownToPyflp: number[] }>(
       "project.events", { path },
+    ),
+  /** Find missing samples by filename under a folder. Reads only; the
+   *  project's references are never rewritten — relinking is FL's job. */
+  locateSamples: (root: string, samples: string[]) =>
+    call<{ root: string; results: LocatedSample[]; found: number; scanned: number }>(
+      "samples.locate", { root, samples },
     ),
   interrupted: () =>
     call<{ interrupted: InterruptedJob[]; count: number }>("jobs.interrupted"),

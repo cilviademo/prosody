@@ -70,7 +70,7 @@ def inspect_project(
     project = backend.parse(source)
     state = classify_state(project)
     analysis = analyse(project, state)
-    health = check_project(project, can_check_plugins=can_check_plugins)
+    health = check_project(project, can_check_plugins=can_check_plugins, source=source)
 
     if log is not None:
         log.op(

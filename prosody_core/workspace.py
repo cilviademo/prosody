@@ -46,15 +46,56 @@ DEFAULT_SETTINGS: dict[str, object] = {
     #: "FL Studio ready" requires a pass against the executable that is still
     #: there (TESTING_HANDOFF P1.1).
     "fl_test": None,
+    #: The user has seen the synced-folder notice and chosen to keep exporting
+    #: there (TESTING_HANDOFF P1.4).
+    "cloud_export_acknowledged": False,
 }
 
 
 def documents_dir() -> Path:
+    """The user's Documents folder — the *real* one.
+
+    On Windows that is a known folder, and OneDrive redirects it to
+    ``<OneDrive>\\Documents`` while ``%USERPROFILE%\\Documents`` keeps existing
+    as an empty decoy. The registry says where it actually is.
+    """
+    override = os.environ.get("PROSODY_DOCUMENTS")
+    if override:
+        return Path(override)
     if sys.platform == "win32":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "Personal")
+            expanded = Path(os.path.expandvars(str(value)))
+            if expanded.is_dir():
+                return expanded
+        except OSError:
+            pass
         profile = os.environ.get("USERPROFILE")
         if profile:
             return Path(profile) / "Documents"
     return Path.home() / "Documents"
+
+
+def default_user_root() -> Path:
+    """Where ``Prosody\\{Exports,Projects}`` goes when nothing is configured.
+
+    Documents, unless Documents is inside a sync client's folder: stems are
+    large, sync clients lock files they are uploading, and a user's renders
+    should not race their cloud quota (TESTING_HANDOFF P1.4). Then it is
+    ``<profile>\\Prosody``, which no client syncs.
+    """
+    from prosody_core.fs.source import cloud_sync_provider
+
+    documents = documents_dir()
+    if cloud_sync_provider(documents):
+        return Path.home() / "Prosody"
+    return documents / "Prosody"
 
 
 def local_app_data() -> Path:
@@ -73,7 +114,7 @@ def default_root() -> Path:
     override = os.environ.get(ENV_HOME)
     if override:
         return Path(override)
-    return documents_dir() / APP_NAME
+    return default_user_root()
 
 
 def default_state() -> Path:

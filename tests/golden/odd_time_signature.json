@@ -213,6 +213,6 @@
       "severity": "info"
     }
   ],
-  "_health_status": "UNKNOWN",
+  "_health_status": "READY",
   "_state": "loop"
 }

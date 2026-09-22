@@ -112,6 +112,8 @@ class ClipSpec:
     track: int
     start_ticks: int
     length_ticks: int
+    #: Set for an audio clip: the item refers to a channel, not a pattern.
+    channel_iid: int | None = None
 
 
 @dataclass
@@ -150,7 +152,7 @@ def _clip_bytes(clip: ClipSpec) -> bytes:
         "<IHHIHH2sH4sff",
         clip.start_ticks,
         PATTERN_BASE,
-        PATTERN_BASE + clip.pattern_iid,
+        clip.channel_iid if clip.channel_iid is not None else PATTERN_BASE + clip.pattern_iid,
         clip.length_ticks,
         MAX_TRACK_INDEX - clip.track,
         0,

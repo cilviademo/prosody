@@ -32,7 +32,7 @@ from prosody_core.env import describe
 from prosody_core.extract import render_fl
 from prosody_core.extract import stems as stems_module
 from prosody_core.fs.safety import sha256_file
-from prosody_core.fs.source import WorkingCopy, temporary_copy, working_copy
+from prosody_core.fs.source import WorkingCopy, cloud_sync_provider, temporary_copy, working_copy
 from prosody_core.health import systemcheck
 from prosody_core.health.check import check_project, classify_state, human_status
 from prosody_core.index import db
@@ -126,8 +126,9 @@ def _project_payload(path: Path, workspace: Workspace) -> dict[str, Any]:
     # inspection produces no output (HARDENING P0.3).
     with temporary_copy(path, workspace.cache) as copy:
         project = _parse_original(backend, copy.path, path)
+        # Needs the file: write_compatibility rewrites it in memory.
+        health = check_project(project, source=copy.path)
     analysis = analyse_project(project, classify_state(project))
-    health = check_project(project)
     key, key_confidence = guess_key(project)
 
     present = {a.role for a in analysis.roles if a.is_confident}
@@ -205,6 +206,12 @@ def _project_payload(path: Path, workspace: Workspace) -> dict[str, Any]:
             "missing": [a.identifier for a in health.missing_assets],
         },
         "canArrange": bool(patterns),
+        # An audio-clip session has playlist clips but no patterns; the UI
+        # says so instead of implying the file is at fault (P1.6).
+        "audioClipCount": sum(
+            1 for a in project.arrangements for c in a.clips if c.kind == "channel"
+        ),
+        "missingSamples": [a.identifier for a in health.missing_assets],
         "warnings": [
             {"code": w.code, "message": w.message, "severity": w.severity.value}
             for w in project.parse_warnings
@@ -293,6 +300,8 @@ def h_environment(payload: dict[str, Any], workspace: Workspace) -> dict[str, An
         "providers": sorted(PROVIDERS),
         "build": buildinfo.describe().as_dict(),
         "safeMode": env.safe_mode,
+        "exportRootCloud": cloud_sync_provider(workspace.export_root()),
+        "suggestedExportRoot": str(Path.home() / "Prosody" / "Exports"),
         "database": db.check_integrity(workspace.db_path).detail,
     }
 
@@ -488,7 +497,7 @@ def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     copy = _working_copy(workspace, path)
     project = _parse_original(backend, copy.path, path)
     analysis = analyse_project(project, classify_state(project))
-    health = check_project(project)
+    health = check_project(project, source=copy.path)
     key, _ = guess_key(project)
     _remember(workspace, path, project, health.status, key, status="Building")
 
@@ -596,6 +605,48 @@ def h_events(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     inv["file"] = path.name
     inv["report"] = as_text(inv)
     return inv
+
+
+def h_samples_locate(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Find missing samples by filename under a folder the user chose.
+
+    Returns candidates marked RELOCATED for the user to confirm. Nothing is
+    written: the project's references stay exactly as FL saved them
+    (HARDENING P1.6). Relinking is FL Studio's job; this answers "are they
+    on this disk at all, and where?".
+    """
+    root = Path(payload["root"])
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a folder")
+    wanted = [str(p) for p in payload.get("samples", [])]
+    if not wanted:
+        return {"root": str(root), "results": [], "found": 0}
+
+    by_name: dict[str, list[Path]] = {}
+    scanned = 0
+    for candidate in root.rglob("*"):
+        if scanned > 200_000:
+            break
+        scanned += 1
+        if candidate.is_file():
+            by_name.setdefault(candidate.name.casefold(), []).append(candidate)
+
+    results = []
+    for original in wanted:
+        name = Path(original.replace("\\", "/")).name
+        hits = by_name.get(name.casefold(), [])
+        results.append({
+            "original": original,
+            "state": "RELOCATED" if hits else "MISSING",
+            "candidates": [str(h) for h in hits[:5]],
+            "candidateCount": len(hits),
+        })
+    return {
+        "root": str(root),
+        "results": results,
+        "found": sum(1 for r in results if r["state"] == "RELOCATED"),
+        "scanned": scanned,
+    }
 
 
 def h_system_check(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
@@ -737,6 +788,7 @@ HANDLERS: dict[str, Handler] = {
     "library.rebuild": h_library_rebuild,
     "system.check": h_system_check,
     "project.events": h_events,
+    "samples.locate": h_samples_locate,
     "jobs.interrupted": h_jobs_interrupted,
     "jobs.discard": h_jobs_discard,
     "jobs.clearPartials": h_jobs_clear_partials,

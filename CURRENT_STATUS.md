@@ -50,6 +50,14 @@ said "pyflp-unknown" because the bundle carried no dist-info (fixed in the
 spec). The 20.9 project's 0 patterns / 0 notes is **unverified** against FL
 and stays open as P1.2.
 
+The P1 list is done in code: the `write_compatibility` health row is answered
+live per file instead of deferred forever; `plugins_available` asks FL's own
+plugin database and never says MISSING; a synced export folder is detected,
+retried through transient locks, and steered towards a local default that the
+shell and the core agree on; missing samples can be located by filename without
+touching the project; and an audio-clip session says what it is. Every one of
+these is verified on fixtures and synthetic paths, none yet on the studio PC.
+
 ## HARDENING acceptance gate
 
 HARDENING.md defines FIRST-RUN READY as fourteen conditions passing **on the

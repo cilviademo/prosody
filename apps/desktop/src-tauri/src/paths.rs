@@ -3,13 +3,14 @@
 //! Two roots, decided here and handed to the core through the environment so
 //! there is exactly one place that knows the policy:
 //!
-//! * documents — `%USERPROFILE%\Documents\Prosody` — the user's exports
+//! * documents — `Documents\Prosody`, or `%USERPROFILE%\Prosody` when Documents
+//!   is inside a sync client's folder — the user's exports
 //! * state     — `%LOCALAPPDATA%\Prosody` — database, settings, cache, logs
 //!
 //! Portable mode collapses both into `Data\` beside the executable, so a copy
 //! on a USB stick writes nothing to the host profile.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub const APP_DIR: &str = "Prosody";
 pub const PORTABLE_FLAG: &str = "portable.flag";
@@ -28,7 +29,7 @@ impl Paths {
             return Paths { documents: dir.clone(), state: dir, portable: true };
         }
         Paths {
-            documents: documents_dir().join(APP_DIR),
+            documents: user_root(&documents_dir()),
             state: state_dir().join(APP_DIR),
             portable: false,
         }
@@ -151,4 +152,73 @@ fn shift_held() -> bool {
 #[cfg(not(windows))]
 fn shift_held() -> bool {
     false
+}
+
+
+/// `<documents>/Prosody`, unless Documents is inside a sync client's folder.
+///
+/// OneDrive redirects Documents into its own tree on most Windows 11 setups.
+/// Stems are large, sync clients lock files they are uploading, and a user's
+/// renders should not race their cloud quota, so the default moves to
+/// `<profile>/Prosody`, which no client syncs. The core applies the same rule
+/// (`workspace.default_user_root`); the two must agree, because the shell is
+/// what tells the core where to write (TESTING_HANDOFF P1.4).
+pub fn user_root(documents: &Path) -> PathBuf {
+    let sync_roots: Vec<PathBuf> = ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"]
+        .iter()
+        .filter_map(|var| std::env::var_os(var).map(PathBuf::from))
+        .collect();
+    if is_cloud_synced(documents, &sync_roots) {
+        if let Some(home) = home_dir() {
+            return home.join(APP_DIR);
+        }
+    }
+    documents.join(APP_DIR)
+}
+
+/// The pure rule, separated so it can be tested without touching the environment.
+pub fn is_cloud_synced(path: &Path, sync_roots: &[PathBuf]) -> bool {
+    let lower = path.to_string_lossy().to_lowercase();
+    if sync_roots.iter().any(|root| {
+        let r = root.to_string_lossy().to_lowercase();
+        !r.is_empty() && lower.starts_with(&r)
+    }) {
+        return true;
+    }
+    // Split on both separators: a Windows path examined on another platform
+    // (the tests) has no components, and a Windows client can be given a
+    // forward-slash path by the user.
+    lower
+        .split(['\\', '/'])
+        .any(|part| part.starts_with("onedrive") || part == "dropbox")
+}
+
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("USERPROFILE")
+        .or_else(|| std::env::var_os("HOME"))
+        .map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod cloud_tests {
+    use super::*;
+
+    #[test]
+    fn a_redirected_documents_folder_is_recognised_by_the_client_root() {
+        let roots = vec![PathBuf::from("C:\\Users\\marcm\\OneDrive")];
+        assert!(is_cloud_synced(Path::new("C:\\Users\\marcm\\OneDrive\\Documents"), &roots));
+    }
+
+    #[test]
+    fn a_plain_documents_folder_is_not() {
+        let roots = vec![PathBuf::from("C:\\Users\\marcm\\OneDrive")];
+        assert!(!is_cloud_synced(Path::new("C:\\Users\\marcm\\Documents"), &roots));
+        assert!(!is_cloud_synced(Path::new("/home/user/Documents"), &[]));
+    }
+
+    #[test]
+    fn a_onedrive_component_counts_even_without_the_variable() {
+        assert!(is_cloud_synced(Path::new("D:\\OneDrive - Contoso\\Documents"), &[]));
+        assert!(is_cloud_synced(Path::new("/Users/x/Dropbox/Documents"), &[]));
+    }
 }

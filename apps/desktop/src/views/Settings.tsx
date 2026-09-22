@@ -123,6 +123,23 @@ export function SettingsView({
             </div>
           </div>
 
+          {env?.exportRootCloud && !settings.cloud_export_acknowledged && (
+            <Note heading={`This folder is synced by ${env.exportRootCloud}`}>
+              Stems can be large, and a sync client locks files while it uploads
+              them. Prosody retries a locked file and steps to the next version
+              if it has to, but a local folder is recommended.
+              <div className="row" style={{ marginTop: "var(--s4)" }}>
+                <Button size="sm" onClick={() => onChange({ export_root: env.suggestedExportRoot })}>
+                  Use {env.suggestedExportRoot}
+                </Button>
+                <Button size="sm" variant="quiet"
+                        onClick={() => onChange({ cloud_export_acknowledged: true })}>
+                  Keep it here
+                </Button>
+              </div>
+            </Note>
+          )}
+
           <div className="setting">
             <div className="lab">
               <div className="t">Audio format</div>

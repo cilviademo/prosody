@@ -40,6 +40,8 @@ export interface Project {
   timeSignature: [number, number];
   flVersion: string | null;
   backend: string;
+  audioClipCount: number;
+  missingSamples: string[];
   state: string;
   counts: {
     patterns: number; channels: number; plugins: number; mixerTracks: number;
@@ -106,6 +108,7 @@ export interface Env {
   flExecutable: string | null; flDiscovery: string; ffmpeg: string | null;
   flArchitecture: string | null; flArchitectureOk: boolean;
   flFileVersion: string | null; renderTested: boolean;
+  exportRootCloud: string | null; suggestedExportRoot: string;
   canRender: boolean; renderReason: string;
   stemStrategy: string | null; stemReason: string;
   workspace: string; exportRoot: string; providers: string[];
@@ -132,6 +135,7 @@ export interface Settings {
   ai_provider: string;
   structure: string;
   render_enabled: boolean;
+  cloud_export_acknowledged?: boolean;
   gui_stems_enabled: boolean;
 }
 
@@ -173,4 +177,11 @@ export interface InterruptedJob {
   lastStage: string;
   stageCount: number;
   partials: string[];
+}
+
+export interface LocatedSample {
+  original: string;
+  state: "RELOCATED" | "MISSING";
+  candidates: string[];
+  candidateCount: number;
 }

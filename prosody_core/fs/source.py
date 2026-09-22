@@ -23,6 +23,7 @@ Three distinct protections, because they fail differently:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import uuid
 from collections.abc import Iterator
@@ -227,13 +228,62 @@ def atomic_write(destination: Path, data: bytes, *, source: Path | None = None) 
             # Without fsync the bytes may still be in the OS cache when the
             # rename lands, so a power loss can leave a named, empty file.
             os.fsync(handle.fileno())
-        os.replace(partial, destination)
+        _replace_with_retry(partial, destination)
     except BaseException:
         # Never leave a .partial behind for the stale-file scan to puzzle over.
         with suppress(OSError):
             partial.unlink(missing_ok=True)
         raise
     return destination
+
+
+#: OneDrive, Dropbox and antivirus scanners take short exclusive locks on a
+#: file they have just seen appear. A rename that lands in that window raises
+#: PermissionError and succeeds a moment later (TESTING_HANDOFF P1.4).
+_REPLACE_ATTEMPTS = 6
+_REPLACE_BACKOFF = 0.15
+
+
+def _replace_with_retry(src: Path, dst: Path) -> None:
+    import time
+
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(_REPLACE_BACKOFF * (attempt + 1))
+
+
+def cloud_sync_provider(path: Path) -> str | None:
+    """"OneDrive", "Dropbox", "iCloud" or None: is this path inside a synced folder?
+
+    Checked against the sync clients' own environment variables first, then
+    against path components, so a redirected Documents folder is recognised
+    without the word appearing in what the user typed.
+    """
+    try:
+        resolved = Path(path).resolve()
+    except OSError:
+        resolved = Path(path)
+    text = str(resolved).casefold()
+    for var, name in (("OneDrive", "OneDrive"), ("OneDriveConsumer", "OneDrive"),
+                      ("OneDriveCommercial", "OneDrive")):
+        root = os.environ.get(var)
+        if root and text.startswith(str(Path(root)).casefold()):
+            return name
+    # Split on both separators, so the rule is the same on every platform and
+    # matches what the shell does in paths.rs.
+    parts = {part for part in re.split(r"[\\/]+", text) if part}
+    if any(part.startswith("onedrive") for part in parts):
+        return "OneDrive"
+    if "dropbox" in parts:
+        return "Dropbox"
+    if any(part in ("icloud drive", "iclouddrive", "icloud~com~apple~clouddocs") for part in parts):
+        return "iCloud"
+    return None
 
 
 def atomic_write_versioned(

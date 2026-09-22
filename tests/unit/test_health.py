@@ -32,9 +32,20 @@ def test_missing_samples_route_to_freeze_mode(backend, make_flp):
     assert report.missing_assets[0].kind == "sample"
 
 
-def test_undeterminable_checks_report_none_not_a_pass(backend, make_flp):
-    report = check_project(backend.parse(make_flp(one_pattern_loop())),
-                           can_check_plugins=False)
+def test_undeterminable_checks_report_none_not_a_pass(backend, make_flp, monkeypatch, tmp_path):
+    """A check that cannot be answered says so; it is never a pass by default.
+
+    Plugin availability is undeterminable only when a plugin is referenced and
+    FL's plugin database is not there to ask; with no plugins referenced it is
+    simply true. Write compatibility is undeterminable without the file.
+    """
+    from prosody_core.model.schemas import PluginRef
+
+    monkeypatch.setenv("PROSODY_FL_PLUGIN_DB", str(tmp_path / "no-database-here"))
+    project = backend.parse(make_flp(one_pattern_loop())).model_copy(
+        update={"plugins": (PluginRef(name="Kontakt", used_by_channels=(0,)),)}
+    )
+    report = check_project(project, can_check_plugins=False)   # no source either
     undetermined = {c.name for c in report.checks if c.ok is None}
     assert "plugins_available" in undetermined
     assert "write_compatibility" in undetermined
