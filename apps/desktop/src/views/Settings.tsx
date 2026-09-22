@@ -14,7 +14,7 @@ export function SettingsView({
   onChange: (next: Partial<SettingsShape>) => void;
 }) {
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string; command?: string[] } | null>(null);
   const [check, setCheck] = useState<SystemCheck | null>(null);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -41,7 +41,9 @@ export function SettingsView({
       const result = await api.testFl(flPath ?? undefined);
       setTestResult({
         ok: result.ok,
-        text: result.ok ? `Connected · ${result.path}` : result.detail,
+        text: result.ok ? `Connected · ${result.detail}` : result.detail,
+        // The exact command, so a failure can be reproduced by hand.
+        command: result.command,
       });
     } catch (e) {
       setTestResult({ ok: false, text: String(e) });
@@ -76,6 +78,11 @@ export function SettingsView({
           {testResult && (
             <div style={{ marginTop: "var(--s4)" }}>
               <Note strong={!testResult.ok}>{testResult.text}</Note>
+              {testResult.command && testResult.command.length > 0 && (
+                <div className="mono" style={{ marginTop: "var(--s3)", fontSize: 11, opacity: 0.8 }}>
+                  {testResult.command.map((a) => (a.includes(" ") ? `"${a}"` : a)).join(" ")}
+                </div>
+              )}
             </div>
           )}
 

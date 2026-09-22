@@ -132,9 +132,32 @@ def scan(
     console().print(f"wrote {report} and {errors}")
 
 
+@app.command("events")
+def events_cmd(
+    flp: Path = typer.Argument(..., help="A single .flp file."),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable output."),
+) -> None:
+    """List every event id in a project: counts, sizes, name previews.
+
+    Shares no note data, plugin state or sample paths. Paste it into a bug
+    report when a project FL Studio opens cannot be read here.
+    """
+    import json as _json
+
+    from prosody_core.parse.events_dump import as_text, inventory
+
+    inv = inventory(flp)
+    # Plain echo, not rich: this is text to paste into a report, and it must
+    # come out byte-for-byte the same whether piped, captured or on screen.
+    typer.echo(_json.dumps(inv, indent=2) if as_json else as_text(inv), nl=False)
+
+
 @app.command("inspect")
 def inspect_cmd(
     flp: Path = typer.Argument(..., help="A single .flp file."),
+    backend: str = typer.Option(
+        "pyflp", "--backend", help="pyflp (default, falls back to native) or native."
+    ),
     out: Path = typer.Option(DEFAULT_OUT, help="Output root."),
     write: bool = typer.Option(
         True, "--write/--no-write", help="Write DATA/ and REPORTS/ under out/<slug>/."
@@ -147,7 +170,10 @@ def inspect_cmd(
         raise typer.Exit(code=2)
 
     try:
-        result = inspect_project(flp, out_root=out if write else None)
+        from prosody_core.parse.native_backend import NativeBackend
+
+        chosen = NativeBackend() if backend == "native" else None
+        result = inspect_project(flp, out_root=out if write else None, backend=chosen)
     except ParseError as exc:
         error_console().print(f"[red]could not parse {flp.name}: {exc.cause}[/red]")
         raise typer.Exit(code=1) from exc

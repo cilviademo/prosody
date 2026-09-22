@@ -8,12 +8,22 @@ emulates a plugin, or guesses what a VST would produce.
 
 ## Command-line switches
 
-| Purpose | Switch | Confidence |
+| Purpose | Form | Confidence |
 | --- | --- | --- |
-| Render a project | `/R<filename>` | documented, **unverified here** |
-| Pick export formats | `/E<fmt,fmt>` | documented, **unverified here** |
-| Render every `.flp` in a folder | `/F<folder>` | documented, **unverified here** |
+| Render a project | `FL64.exe /R /E<fmt,fmt> <project.flp>` | documented; **the previous form was wrong** (see below); re-test pending on FL 2026 |
+| Pick export formats | `/E<fmt,fmt>` (e.g. `/Ewav`, `/Ewav,mp3`) | documented, unverified here |
+| Render every `.flp` in a folder | `/F<folder>` | documented, unverified here |
 | Export MIDI | unknown letter | **unconfirmed — do not guess** |
+
+**What the studio PC found (2026-09-22).** Test Connection reported "FL Studio
+exited cleanly but produced no files (exit 0)". The command being run was
+`FL64.exe /R<output-stem> /Ewav` — the *output* path where the project
+belongs, and no project argument at all. FL launched with nothing to render.
+The command is now the documented form with the project as the last argument;
+FL writes beside the project by default, so both that folder and the export
+folder are watched and new audio is moved into place. The exact argv is shown
+under Settings after every Test and recorded in `render.json`. Whether FL 2026
+honours this form is the next thing the studio PC has to say.
 
 `flpf doctor` prints this table and marks the MIDI switch `UNCONFIRMED`.
 `tests/render/test_midi_export_switch_has_been_confirmed` **fails** whenever

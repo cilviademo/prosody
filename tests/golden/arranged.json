@@ -227,6 +227,11 @@
   "unknown_event_ids": [],
   "parse_warnings": [
     {
+      "code": "fl_version_newer",
+      "message": "Saved with FL Studio 21.2.3.4004. Prosody has been verified on projects up to FL 20.9; if anything looks missing, Copy event inventory on the project screen gives a report to send.",
+      "severity": "info"
+    },
+    {
       "code": "mixer_slots_undescribable",
       "message": "project has no mixer Params event; insert effect chains cannot be enumerated by this backend",
       "severity": "info"

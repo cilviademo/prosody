@@ -23,6 +23,33 @@ Windows.
 
 ---
 
+## Studio-PC test, 2026-09-22 (TESTING_HANDOFF.md)
+
+The first run on a real machine. Three P0 findings, each now fixed in code and
+verified as far as a Linux container can, none yet re-verified on the PC:
+
+- **FL Studio 2026 was not detected.** The edition list stopped at 2025.
+  Discovery now globs every `Image-Line\*` folder, walks the registry tree,
+  and prefers the newest by the executable's file version.
+- **Test Connection: exit 0, no file.** The render command passed the *output*
+  path where the project belongs and never named the project. FL launched with
+  nothing to render. Now the documented `/R /E<fmt> <project>` form; output is
+  watched beside the project and moved; the WAV's length is checked; the exact
+  argv is shown after every Test.
+- **An FL 2026 project could not be read.** PyFLP 2.2.1's string layer raised
+  on it. Prosody now falls back to its own event reader, which agrees with
+  PyFLP on every fixture and is verified on a 2026-shaped fixture and a
+  reproduction of the exception — not on the real file. The file's event
+  inventory (`flpf events`, or Copy event inventory in the app) is what will
+  finish the diagnosis, and it shares no note data, plugin state or sample
+  paths.
+
+Also from the run: the header pill said "FL Studio ready" after a failed Test
+(it now needs a passing one against the same executable), and the health check
+said "pyflp-unknown" because the bundle carried no dist-info (fixed in the
+spec). The 20.9 project's 0 patterns / 0 notes is **unverified** against FL
+and stays open as P1.2.
+
 ## HARDENING acceptance gate
 
 HARDENING.md defines FIRST-RUN READY as fourteen conditions passing **on the

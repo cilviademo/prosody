@@ -42,6 +42,10 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "render_enabled": False,
     "gui_stems_enabled": False,
     "window": None,
+    #: The last Test Connection: exe, its size/mtime, pass/fail, when, detail.
+    #: "FL Studio ready" requires a pass against the executable that is still
+    #: there (TESTING_HANDOFF P1.1).
+    "fl_test": None,
 }
 
 

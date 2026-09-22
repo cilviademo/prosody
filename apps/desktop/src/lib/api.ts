@@ -57,17 +57,25 @@ export const api = {
   library: () => call<{ projects: LibraryItem[] }>("library.list").then((r) => r.projects),
   forget: (id: string) => call<{ removed: string }>("library.forget", { id }),
   systemCheck: () => call<SystemCheck>("system.check"),
+  /** Event-id inventory of a project: ids, counts, sizes, name previews. No
+   *  note data, plugin state or sample paths — safe to paste into a report,
+   *  and it works on files the parser cannot read. */
+  events: (path: string) =>
+    call<{ report: string; flVersion: string | null; unknownToPyflp: number[] }>(
+      "project.events", { path },
+    ),
   interrupted: () =>
     call<{ interrupted: InterruptedJob[]; count: number }>("jobs.interrupted"),
   discardJob: (outDir: string) =>
     call<{ discarded: string }>("jobs.discard", { outDir }),
   rebuildLibrary: () =>
     call<{ recovered: number; projects: number; skipped: string[] }>("library.rebuild"),
-  testFl: (path?: string) =>
+  testFl: (path?: string, project?: string) =>
     call<{
       ok: boolean; path: string | null; detail: string;
       seconds?: number; rendered?: boolean;
-    }>("fl.test", { path }),
+      duration?: number | null; expected?: number | null; command?: string[];
+    }>("fl.test", { path, project }),
 };
 
 /** Subscribe to build progress. Returns an unsubscribe function. */

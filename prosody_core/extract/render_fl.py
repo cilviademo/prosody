@@ -133,6 +133,93 @@ def _existing_ancestor(path: Path) -> Path:
     return candidate
 
 
+def _snapshot(folders: set[Path]) -> dict[Path, float]:
+    seen: dict[Path, float] = {}
+    for folder in folders:
+        if folder.is_dir():
+            for p in folder.iterdir():
+                if p.is_file():
+                    try:
+                        seen[p] = p.stat().st_mtime
+                    except OSError:
+                        continue
+    return seen
+
+
+def _collect_outputs(
+    folders: set[Path], before: dict[Path, float], launched: float, out_dir: Path,
+) -> list[Path]:
+    """New or rewritten audio files in the watched folders, moved into out_dir."""
+    found: list[Path] = []
+    for folder in folders:
+        if not folder.is_dir():
+            continue
+        for p in folder.iterdir():
+            if not p.is_file() or p.suffix.lower() == ".flp":
+                continue
+            try:
+                mtime = p.stat().st_mtime
+            except OSError:
+                continue
+            if p in before and mtime <= max(before[p], launched):
+                continue
+            found.append(p)
+
+    moved: list[Path] = []
+    for p in found:
+        if p.parent == out_dir:
+            moved.append(p)
+            continue
+        target = out_dir / p.name
+        n = 2
+        while target.exists():
+            target = out_dir / f"{p.stem}_{n}{p.suffix}"
+            n += 1
+        try:
+            shutil.move(str(p), str(target))
+            moved.append(target)
+        except OSError:
+            moved.append(p)   # report it where it is rather than lose it
+    return sorted(moved)
+
+
+def wav_duration_seconds(path: Path) -> float | None:
+    """Duration from the RIFF headers; None if the file is not a readable WAV.
+
+    Parsed by hand rather than with ``wave`` because FL writes 24-bit and
+    32-bit float WAVs that the stdlib module refuses.
+    """
+    try:
+        with Path(path).open("rb") as f:
+            if f.read(4) != b"RIFF":
+                return None
+            f.read(4)
+            if f.read(4) != b"WAVE":
+                return None
+            rate = channels = bits = 0
+            data_size = None
+            while True:
+                head = f.read(8)
+                if len(head) < 8:
+                    break
+                tag, size = head[:4], int.from_bytes(head[4:], "little")
+                if tag == b"fmt ":
+                    fmt = f.read(size)
+                    channels = int.from_bytes(fmt[2:4], "little")
+                    rate = int.from_bytes(fmt[4:8], "little")
+                    bits = int.from_bytes(fmt[14:16], "little")
+                elif tag == b"data":
+                    data_size = size
+                    break
+                else:
+                    f.seek(size + (size & 1), 1)
+            if not (rate and channels and bits) or data_size is None:
+                return None
+            return data_size / (rate * channels * (bits // 8))
+    except OSError:
+        return None
+
+
 def _run(command: list[str], timeout: int) -> tuple[int | None, str, str, float]:
     """Run FL and capture everything. Never raises.
 
@@ -204,16 +291,29 @@ def render_project(
     flp = Path(flp)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    target = out_dir / flp.stem
 
+    # The documented form: /R renders, /E picks formats, and the project is a
+    # positional argument. The previous command passed the *output* path where
+    # the project belongs and never named the project at all — FL Studio
+    # launched with nothing to render, exited 0 and wrote nothing, which is
+    # exactly what the studio PC reported (TESTING_HANDOFF P0.2).
     command = [
         str(env.fl_executable),
-        f"/R{target}",
+        "/R",
         f"/E{','.join(formats)}",
+        str(flp),
     ]
-    before = set(out_dir.iterdir())
+
+    # FL writes beside the project by default, so both that folder and the
+    # requested one are watched, and anything new is moved into place. The
+    # rendered project is always a working copy or a derivative in a folder
+    # Prosody owns — never the user's original — so nothing lands beside a
+    # source file.
+    watched = {out_dir, flp.parent}
+    before = _snapshot(watched)
+    launched = time.time() - 1.0     # a second of clock tolerance
     code, stdout, stderr, seconds = _run(command, timeout)
-    produced = sorted(p for p in out_dir.iterdir() if p not in before and p.is_file())
+    produced = _collect_outputs(watched, before, launched, out_dir)
 
     success = code == 0 and bool(produced)
     message = ""
@@ -302,10 +402,17 @@ class ConnectionTest:
     detail: str
     seconds: float = 0.0
     output: str | None = None
+    duration: float | None = None
+    expected: float | None = None
+    command: list[str] = field(default_factory=list)
+
+
+#: The bundled connection-test project: one bar of kick at 120 BPM.
+TEST_PROJECT_BARS, TEST_PROJECT_TEMPO = 1.0, 120.0
 
 
 def test_connection(
-    env: Environment | None = None, *, timeout: int = 600,
+    env: Environment | None = None, *, timeout: int = 600, project: Path | None = None,
 ) -> ConnectionTest:
     """Render the bundled test project and report what happened.
 
@@ -318,9 +425,19 @@ def test_connection(
     if env.fl_executable is None:
         return ConnectionTest(False, f"FL Studio not found — {env.fl_discovery}")
 
-    project = connection_test_project()
-    if project is None:
-        return ConnectionTest(False, "the bundled test project is missing")
+    # A caller may supply a project of their own — the bundled one is hand
+    # built, and a project the installed FL Studio itself saved is a fairer
+    # test of that FL Studio (TESTING_HANDOFF P0.2 step 3).
+    expected: float | None = None
+    if project is not None:
+        project = Path(project)
+        if not project.is_file():
+            return ConnectionTest(False, f"{project} does not exist")
+    else:
+        project = connection_test_project()
+        if project is None:
+            return ConnectionTest(False, "the bundled test project is missing")
+        expected = expected_duration_seconds(TEST_PROJECT_BARS, TEST_PROJECT_TEMPO)
 
     with tempfile.TemporaryDirectory(prefix="prosody-fltest-") as tmp:
         work = Path(tmp)
@@ -335,16 +452,25 @@ def test_connection(
 
         if result.ok and result.outputs:
             produced = result.outputs[0]
-            return ConnectionTest(
-                True,
-                f"rendered {produced.name} in {result.seconds:.1f}s",
-                result.seconds,
-                produced.name,
-            )
+            duration = wav_duration_seconds(produced)
+            detail = f"rendered {produced.name} in {result.seconds:.1f}s"
+            ok = True
+            if duration is not None:
+                detail += f" · {duration:.2f} s of audio"
+                if expected is not None:
+                    detail += f" (expected about {expected:.1f} s)"
+                    # FL adds a release tail, so longer is fine; much shorter
+                    # means it did not actually render the project.
+                    if duration < expected * 0.5:
+                        ok = False
+                        detail += " — shorter than the project; FL did not render it fully"
+            return ConnectionTest(ok, detail, result.seconds, produced.name,
+                                  duration, expected, list(result.command))
         detail = result.message or "FL Studio produced no audio"
         if result.exit_code is not None:
             detail = f"{detail} (exit {result.exit_code})"
-        return ConnectionTest(False, detail, result.seconds)
+        return ConnectionTest(False, detail, result.seconds, None, None, expected,
+                              list(result.command))
 
 
 def expected_duration_seconds(bars: float, tempo: float, beats_per_bar: int = 4) -> float:

@@ -87,3 +87,41 @@ def already_arranged() -> FlpSpec:
         for t, p in enumerate((1, 5), start=0)
     ]
     return spec
+
+
+def fl2026_loop() -> FlpSpec:
+    """A 4-bar loop shaped like one saved by FL Studio 2026 on the studio PC.
+
+    Version string in the 2026 line, a build number FL 2026 would write, and
+    the two channel-rack display groups the real file carried. Whatever else
+    FL 2026 adds is unknown until the event inventory of the real file is
+    pasted back; this fixture proves the reader survives what is known.
+    """
+    ppq = PPQ
+    return FlpSpec(
+        title="Loop Starter",
+        fl_version="2026.1.0.4321",
+        fl_build=5121,
+        tempo=128.0,
+        ppq=ppq,
+        display_groups=["Unsorted", "Loop Starter #1"],
+        channels=[
+            ChannelSpec("Kick", 1, "D:\\Drums\\Kick.wav"),
+            ChannelSpec("Keys", 2, kind=TYPE_NATIVE),
+        ],
+        patterns=[
+            PatternSpec(iid=1, name="Drums", notes=tuple(
+                NoteSpec(position=i * ppq, length=ppq // 2, key=60, velocity=100, channel=0)
+                for i in range(16)
+            )),
+            PatternSpec(iid=2, name="Chords", notes=tuple(
+                NoteSpec(position=bar * 4 * ppq, length=4 * ppq, key=key, velocity=90, channel=1)
+                for bar in range(4) for key in (60, 64, 67)
+            )),
+        ],
+        clips=[
+            ClipSpec(pattern_iid=1, track=0, start_ticks=0, length_ticks=16 * ppq),
+            ClipSpec(pattern_iid=2, track=1, start_ticks=0, length_ticks=16 * ppq),
+        ],
+        track_names=["Drums", "Keys"],
+    )

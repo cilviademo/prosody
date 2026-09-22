@@ -35,6 +35,11 @@ from prosody_core.model.schemas import (
 )
 from prosody_core.parse import _pyflp_compat
 from prosody_core.parse.adapter import ParseError
+from prosody_core.parse.native_backend import (
+    NativeBackend,
+    newer_than_pyflp_supports,
+    version_notice,
+)
 
 T = TypeVar("T")
 
@@ -106,10 +111,40 @@ class PyFLPBackend:
 
         try:
             project = pyflp.parse(path)
-        except Exception as exc:
-            raise ParseError(path, exc) from exc
+        except Exception as exc:  # noqa: BLE001 - deliberate: any PyFLP failure falls back
+            # PyFLP's string layer, not the file, is the usual reason a project
+            # FL Studio opens fine cannot be read here (seen on FL 2026). The
+            # native reader splits by the format's own rule and re-slices
+            # nothing, so it is tried before giving up. The original exception
+            # is kept as an INFO warning for Diagnostics, never as the headline.
+            fallback = NativeBackend()
+            try:
+                result = fallback.parse(path)
+            except Exception as native_exc:
+                raise ParseError(path, exc) from native_exc
+            if any(w.code == "file_truncated" for w in result.parse_warnings):
+                # A byte count that contradicts the header is damage, not a
+                # parser gap. The automatic fallback must not make a broken
+                # file look readable; `--backend native` remains available for
+                # looking inside one on purpose.
+                raise ParseError(path, exc) from None
+            return result.model_copy(update={
+                "backend": "native (pyflp failed)",
+                "parse_warnings": (
+                    *result.parse_warnings,
+                    ParseWarning(
+                        code="pyflp_failed",
+                        message=f"PyFLP could not read this project: {type(exc).__name__}: {exc}",
+                        severity=Severity.INFO,
+                    ),
+                ),
+            })
 
         w = _WarningSink()
+        version_text = w.guard("fl_version", None, lambda: str(project.version))
+        if version_text and newer_than_pyflp_supports(version_text):
+            message, severity = version_notice(version_text)
+            w.add("fl_version_newer", message, severity)
         channels = self._channels(project, w)
         patterns = self._patterns(project, w)
         mixer = self._mixer(project, w)
@@ -123,7 +158,7 @@ class PyFLPBackend:
             source_path=str(path),
             source_bytes=size,
             backend=self.name,
-            fl_version=w.guard("fl_version", None, lambda: str(project.version)),
+            fl_version=version_text,
             format=w.guard("format", None, lambda: int(project.format)),
             tempo=w.guard("tempo", None, lambda: float(project.tempo)),
             ppq=ppq,

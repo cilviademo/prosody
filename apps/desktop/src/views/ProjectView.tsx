@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { Project, RoleFlag } from "../lib/types";
+import { api } from "../lib/api";
 import {
-  Advanced, Back, Badge, Data, KeyValues, Note, Option, Readout, Section,
+  Advanced, Back, Badge, Button, Data, KeyValues, Note, Option, Readout, Section,
 } from "../components/ui";
 import { bars, clock, tempo } from "../lib/format";
 
@@ -18,6 +20,7 @@ export function ProjectView({
   onChoose: (mode: "extract" | "arrange" | "both") => void;
   onBack: () => void;
 }) {
+  const [inventoryCopied, setInventoryCopied] = useState(false);
   const c = project.counts;
   const blocked = project.health.status === "BLOCKED";
   const missing = c.samplesMissing;
@@ -136,7 +139,14 @@ export function ProjectView({
       <Advanced title="Diagnostics">
         <KeyValues
           rows={[
-            ["FL Studio version", project.flVersion ?? "not recorded"],
+            [
+              "FL Studio version",
+              `${project.flVersion ?? "not recorded"}${
+                project.backend.startsWith("native")
+                  ? " · read by Prosody's own reader (PyFLP could not)"
+                  : ""
+              }`,
+            ],
             ["Detected state", project.state],
             ["Source", <span className="mono" key="p">{project.path}</span>],
             ["SHA-256", <span className="mono" key="h">{project.hash}</span>],
@@ -187,6 +197,25 @@ export function ProjectView({
             </Data>
           </>
         )}
+
+        <div className="row" style={{ marginTop: "var(--s5)" }}>
+          <Button
+            onClick={async () => {
+              try {
+                const inv = await api.events(project.path);
+                await navigator.clipboard.writeText(inv.report);
+                setInventoryCopied(true);
+              } catch {
+                setInventoryCopied(false);
+              }
+            }}
+          >
+            {inventoryCopied ? "Copied" : "Copy event inventory"}
+          </Button>
+          <span className="copy" style={{ fontSize: 12, opacity: 0.8 }}>
+            what the file contains, by event id — no notes, plugin state or sample paths
+          </span>
+        </div>
       </Advanced>
     </div>
   );

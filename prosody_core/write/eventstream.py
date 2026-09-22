@@ -73,6 +73,8 @@ class FLPFile:
 
     header: bytes
     events: list[Event]
+    #: Bytes the data chunk declared but the file did not hold (strict=False only).
+    truncated_by: int = 0
 
     @property
     def ppq(self) -> int:
@@ -109,8 +111,14 @@ def payload_size(event_id: int) -> int:
     return -1  # variable
 
 
-def read_flp(path: Path) -> FLPFile:
-    """Parse a .flp into a verbatim, rewritable form."""
+def read_flp(path: Path, *, strict: bool = True) -> FLPFile:
+    """Parse a .flp into a verbatim, rewritable form.
+
+    ``strict`` is what the writer needs: a file whose declared size disagrees
+    with its bytes is not one to rewrite. The fallback *reader* passes
+    ``strict=False`` and takes what is there, recording the shortfall in
+    ``truncated_by`` — a project FL Studio still opens should still inspect.
+    """
     raw = Path(path).read_bytes()
     if len(raw) < HEADER_SIZE + DATA_HEADER_SIZE:
         raise MalformedFLP("file is too small to be an FLP")
@@ -126,10 +134,16 @@ def read_flp(path: Path) -> FLPFile:
 
     declared = int.from_bytes(raw[HEADER_SIZE + 4:HEADER_SIZE + 8], "little")
     body = raw[HEADER_SIZE + DATA_HEADER_SIZE:]
+    truncated_by = 0
     if len(body) != declared:
-        raise MalformedFLP(
-            f"data chunk size mismatch: header says {declared}, file has {len(body)}"
-        )
+        if strict:
+            raise MalformedFLP(
+                f"data chunk size mismatch: header says {declared}, file has {len(body)}"
+            )
+        if len(body) > declared:
+            body = body[:declared]          # trailing bytes past the chunk
+        else:
+            truncated_by = declared - len(body)
 
     events: list[Event] = []
     offset = 0
@@ -140,18 +154,29 @@ def read_flp(path: Path) -> FLPFile:
         if fixed >= 0:
             end = offset + fixed
             if end > len(body):
-                raise MalformedFLP(f"truncated payload for event {event_id}")
+                if strict:
+                    raise MalformedFLP(f"truncated payload for event {event_id}")
+                truncated_by += end - len(body)
+                break
             events.append(Event(event_id, body[offset:end]))
             offset = end
         else:
-            length, offset = read_varint(body, offset)
+            try:
+                length, offset = read_varint(body, offset)
+            except MalformedFLP:
+                if strict:
+                    raise
+                break
             end = offset + length
             if end > len(body):
-                raise MalformedFLP(f"truncated payload for event {event_id}")
+                if strict:
+                    raise MalformedFLP(f"truncated payload for event {event_id}")
+                truncated_by += end - len(body)
+                break
             events.append(Event(event_id, body[offset:end]))
             offset = end
 
-    return FLPFile(header=header, events=events)
+    return FLPFile(header=header, events=events, truncated_by=truncated_by)
 
 
 def write_flp(flp: FLPFile, path: Path, *, source: Path | None = None) -> Path:

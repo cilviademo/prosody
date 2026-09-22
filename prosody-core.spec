@@ -25,6 +25,12 @@ datas = [
     (str(PACKAGE / "assets"), "prosody_core/assets"),
 ]
 
+# importlib.metadata needs the .dist-info folder, which PyInstaller does not
+# collect on its own; without it the health check reports "pyflp-unknown".
+from PyInstaller.utils.hooks import copy_metadata
+
+datas += copy_metadata("pyflp")
+
 binaries = []
 
 hiddenimports = [

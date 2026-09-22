@@ -8,7 +8,26 @@ would be the same mistake as marking an untested acceptance step as WORKING.
 
 | FL version | Parse | Write derivative | Opens generated `.flp` | Render | MIDI export | ZIP export | Stems | Tested on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| _none yet_ | — | — | — | — | — | — | — | — |
+| 20.9.2.2963 | pass¹ | — | — | fail² | — | — | — | 2026-09-22, studio PC, release v0.1.0 |
+| 2026 (loop_test.flp) | fail³ → fallback untested | — | — | fail² | — | — | — | 2026-09-22, studio PC, release v0.1.0 |
+
+¹ Parsed (90 channels, 127 mixer tracks, 260 clips, 39 missing samples) but
+reported 0 patterns / 0 notes / 1 plugin for a session whose channels are named
+after generator plugins. Unverified against what FL shows — P1.2 in
+`TESTING_HANDOFF.md`. Treat the counts as unconfirmed until FL's own pattern
+count is compared.
+
+² Not FL's fault: the render command never named the project. Fixed; not yet
+re-run on the studio PC.
+
+³ PyFLP 2.2.1 raised a UTF-16 decode error whose payload contained several
+whole events joined together — a fault in PyFLP's string layer, above the
+event splitter. The file carried `DisplayGroupID.Name` (231) events
+("Unsorted", "Loop Starter #1"), which PyFLP knows. Prosody now falls back to
+its own event reader when PyFLP raises; that fallback is verified on a
+2026-shaped fixture and on a reproduction of the exception, **not yet on the
+real file**. `flpf events loop_test.flp` (or Copy event inventory in the app)
+produces the inventory that will say what else FL 2026 writes.
 
 ## What has been tested instead
 

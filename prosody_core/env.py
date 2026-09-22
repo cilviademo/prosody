@@ -23,7 +23,13 @@ from prosody_core.fs import pe
 FL_EXE_NAMES = ("FL64.exe", "FL.exe")
 
 #: Editions newest first, so a machine with several installs offers the newest.
-FL_EDITIONS = ("FL Studio 2025", "FL Studio 2024", "FL Studio 21", "FL Studio 20")
+#: Known editions, newest first. Discovery no longer depends on this list —
+#: it globs ``Image-Line\*`` — but the list still seeds the search order and
+#: documents what has been seen. FL Studio 2026 was missing from it, which is
+#: how the studio PC's install went undetected (TESTING_HANDOFF P0.3).
+FL_EDITIONS = (
+    "FL Studio 2026", "FL Studio 2025", "FL Studio 2024", "FL Studio 21", "FL Studio 20",
+)
 
 #: Program Files variants, 64-bit first.
 PROGRAM_ROOTS = (r"C:\Program Files", r"C:\Program Files (x86)")
@@ -32,6 +38,10 @@ REGISTRY_KEYS = (
     r"SOFTWARE\Image-Line\Shared\Paths",
     r"SOFTWARE\WOW6432Node\Image-Line\Shared\Paths",
 )
+#: Roots walked recursively for any value that points at an FL install.
+REGISTRY_ROOTS = (r"SOFTWARE\Image-Line", r"SOFTWARE\WOW6432Node\Image-Line")
+_REGISTRY_MAX_KEYS = 400
+_REGISTRY_MAX_DEPTH = 6
 
 #: Command-line switches this project relies on. ``midi_export`` is deliberately
 #: None: the switch letter is documented as existing but has not been confirmed
@@ -77,6 +87,8 @@ class Environment:
     #: Safe Mode: inspect and browse only. Nothing is written and nothing is
     #: launched (HARDENING P0.2).
     safe_mode: bool = False
+    #: FL64.exe's own version resource, e.g. ``2026.1.0.4321``. None off Windows.
+    fl_file_version: str | None = None
 
     @property
     def can_render(self) -> bool:
@@ -142,6 +154,142 @@ def find_ffmpeg() -> Path | None:
 # --------------------------------------------------------------------------- #
 
 
+def _edition_number(folder: Path) -> tuple[int, ...]:
+    """``FL Studio 2026`` → ``(2026,)``; ``FL Studio 21`` → ``(21,)``."""
+    digits = "".join(ch if ch.isdigit() else " " for ch in folder.name).split()
+    return tuple(int(d) for d in digits[:1])
+
+
+def file_version(path: Path) -> str | None:
+    """The executable's own version string (Windows only), e.g. ``2026.1.0.4321``.
+
+    Read from the PE version resource, which is what FL's About box shows and
+    what a per-version switch table has to key on.
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        import struct as _struct
+        from ctypes import wintypes
+
+        ver = ctypes.WinDLL("version", use_last_error=True)  # type: ignore[attr-defined]
+        size = ver.GetFileVersionInfoSizeW(str(path), None)
+        if not size:
+            return None
+        buf = ctypes.create_string_buffer(size)
+        if not ver.GetFileVersionInfoW(str(path), 0, size, buf):
+            return None
+        ptr, length = ctypes.c_void_p(), wintypes.UINT()
+        if not ver.VerQueryValueW(buf, "\\", ctypes.byref(ptr), ctypes.byref(length)):
+            return None
+        info = ctypes.string_at(ptr, length.value)
+        ms, ls = _struct.unpack_from("<II", info, 8)
+        return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+    except Exception:  # noqa: BLE001 - a missing version is cosmetic
+        return None
+
+
+@dataclass(frozen=True)
+class FLCandidate:
+    path: Path
+    source: str
+    version: str | None
+
+    @property
+    def rank(self) -> tuple[int, ...]:
+        parsed = tuple(int(x) for x in (self.version or "").split(".") if x.isdigit())
+        return parsed or _edition_number(self.path.parent)
+
+
+def _registry_candidates() -> list[FLCandidate]:
+    """Every install path the Image-Line registry tree mentions, in any hive.
+
+    Walked recursively because the layout is not documented and changed with
+    the year-numbered editions; any string value that names an existing folder
+    holding FL64.exe, or the executable itself, counts.
+    """
+    if sys.platform != "win32":
+        return []
+    try:
+        import winreg
+    except ImportError:  # pragma: no cover
+        return []
+
+    found: dict[Path, FLCandidate] = {}
+    visited = 0
+
+    def walk(hive: int, hive_name: str, key_path: str, depth: int) -> None:
+        nonlocal visited
+        if depth > _REGISTRY_MAX_DEPTH or visited > _REGISTRY_MAX_KEYS:
+            return
+        try:
+            key = winreg.OpenKey(hive, key_path)
+        except OSError:
+            return
+        visited += 1
+        with key:
+            i = 0
+            while True:
+                try:
+                    _name, value, kind = winreg.EnumValue(key, i)
+                except OSError:
+                    break
+                i += 1
+                if kind not in (winreg.REG_SZ, winreg.REG_EXPAND_SZ) or not value:
+                    continue
+                text = os.path.expandvars(str(value)).strip().strip('"')
+                candidate = Path(text)
+                exes = [candidate] if candidate.suffix.lower() == ".exe" else [
+                    candidate / n for n in FL_EXE_NAMES
+                ]
+                for exe in exes:
+                    if exe.name in FL_EXE_NAMES and exe.is_file() and exe not in found:
+                        found[exe] = FLCandidate(exe, f"registry: {hive_name}\\{key_path}", file_version(exe))
+            j = 0
+            while True:
+                try:
+                    sub = winreg.EnumKey(key, j)
+                except OSError:
+                    break
+                j += 1
+                walk(hive, hive_name, f"{key_path}\\{sub}", depth + 1)
+
+    for hive_name, hive in (("HKLM", winreg.HKEY_LOCAL_MACHINE), ("HKCU", winreg.HKEY_CURRENT_USER)):
+        for root in REGISTRY_ROOTS:
+            walk(hive, hive_name, root, 0)
+    return list(found.values())
+
+
+def discover_fl_candidates(
+    program_roots: tuple[str, ...] | None = None,
+) -> tuple[FLCandidate, ...]:
+    """Every FL Studio on this machine, newest first.
+
+    Globs ``<Program Files>\\Image-Line\\*`` for any edition rather than checking
+    a list of names, then adds whatever the registry names. Ranked by the
+    executable's file version, falling back to the year or major in the folder
+    name, so several installs offer the newest.
+    """
+    roots = program_roots if program_roots is not None else PROGRAM_ROOTS
+    found: dict[Path, FLCandidate] = {}
+    for root in roots:
+        base = Path(root) / "Image-Line"
+        if not base.is_dir():
+            continue
+        for folder in sorted(base.iterdir()):
+            if not folder.is_dir():
+                continue
+            for exe_name in FL_EXE_NAMES:
+                exe = folder / exe_name
+                if exe.is_file() and exe not in found:
+                    found[exe] = FLCandidate(exe, f"install folder: {folder}", file_version(exe))
+                    break
+    for cand in _registry_candidates():
+        found.setdefault(cand.path, cand)
+    return tuple(sorted(found.values(), key=lambda c: c.rank, reverse=True))
+
+
 def _from_registry() -> tuple[Path | None, str]:
     """Look in both HKLM and HKCU — FL can be installed per-user."""
     if sys.platform != "win32":
@@ -183,15 +331,20 @@ def find_fl_executable() -> tuple[Path | None, str]:
             return candidate, "FLPF_FL_EXE override"
         return None, f"FLPF_FL_EXE points at a missing file ({override})"
 
+    candidates = discover_fl_candidates()
+    if candidates:
+        best = candidates[0]
+        others = ", ".join(c.path.parent.name for c in candidates[1:])
+        how = best.source
+        if best.version:
+            how += f" (v{best.version})"
+        if others:
+            how += f"; also found: {others}"
+        return best.path, how
+
     found, how = _from_registry()
     if found is not None:
         return found, how
-
-    for root in windows_install_roots():
-        for exe_name in FL_EXE_NAMES:
-            candidate = Path(root) / exe_name
-            if candidate.is_file():
-                return candidate, f"default install path: {root}"
 
     for exe_name in FL_EXE_NAMES:
         if located := shutil.which(exe_name):
@@ -252,4 +405,5 @@ def describe(settings: Mapping[str, object] | None = None) -> Environment:
         fl_architecture=architecture,
         fl_architecture_ok=architecture_ok,
         safe_mode=safe_mode(),
+        fl_file_version=file_version(fl_exe) if fl_exe is not None else None,
     )

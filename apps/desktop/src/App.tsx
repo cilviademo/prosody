@@ -55,6 +55,10 @@ export default function App() {
 
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The path that failed to open, so its event inventory can be copied: the
+  // report that finishes a parser diagnosis without sharing the project.
+  const [failedPath, setFailedPath] = useState<string | null>(null);
+  const [inventoryCopied, setInventoryCopied] = useState(false);
   const [status, setStatus] = useState<BackendStatus | null>(null);
 
   const pageRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +149,8 @@ export default function App() {
   const openProject = useCallback((path: string) => {
     setOpening(true);
     setError(null);
+    setFailedPath(null);
+    setInventoryCopied(false);
     api
       .inspect(path)
       .then((p) => {
@@ -154,9 +160,22 @@ export default function App() {
         setStep("project");
         refreshLibrary();
       })
-      .catch((e) => setError(String((e as Error).message ?? e)))
+      .catch((e) => {
+        setError(String((e as Error).message ?? e));
+        setFailedPath(path);
+      })
       .finally(() => setOpening(false));
   }, [refreshLibrary]);
+
+  const copyInventory = useCallback(async (path: string) => {
+    try {
+      const inv = await api.events(path);
+      await navigator.clipboard.writeText(inv.report);
+      setInventoryCopied(true);
+    } catch {
+      setInventoryCopied(false);
+    }
+  }, []);
 
   // Look for interrupted builds once, at startup.
   useEffect(() => {
@@ -285,15 +304,22 @@ export default function App() {
           ))}
         </nav>
         <span className="grow" />
+        {/* "Ready" is a claim about rendering. A configured path proves
+            nothing about that; only a passing Test does, and the studio PC
+            showed green after a failed one (TESTING_HANDOFF P1.1). */}
         <button
           className="status-chip"
-          data-on={Boolean(env?.canRender)}
+          data-on={Boolean(env?.canRender && env?.renderTested)}
           onClick={() => setTab("settings")}
           type="button"
           title={env?.renderReason}
         >
           <span className="led" aria-hidden="true" />
-          {env?.canRender ? "FL Studio ready" : "FL Studio not configured"}
+          {env?.canRender && env?.renderTested
+            ? "FL Studio ready"
+            : env?.canRender
+              ? "FL Studio configured · render untested"
+              : "FL Studio not configured"}
         </button>
       </header>
 
@@ -336,7 +362,22 @@ export default function App() {
 
       <div className="page" ref={pageRef}>
         {tab === "finish" && step === "home" && (
-          <Home onOpen={openProject} recent={library} busy={opening} error={error} />
+          <Home
+            onOpen={openProject}
+            recent={library}
+            busy={opening}
+            error={error}
+            errorAction={failedPath ? (
+              <div className="row" style={{ marginTop: "var(--s4)" }}>
+                <Button onClick={() => void copyInventory(failedPath)}>
+                  {inventoryCopied ? "Copied" : "Copy event inventory"}
+                </Button>
+                <span className="copy" style={{ fontSize: 12, opacity: 0.8 }}>
+                  ids, counts and name previews only — no notes, plugin state or sample paths
+                </span>
+              </div>
+            ) : undefined}
+          />
         )}
 
         {tab === "finish" && step === "project" && project && (

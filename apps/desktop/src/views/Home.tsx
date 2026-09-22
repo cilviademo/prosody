@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { LibraryItem } from "../lib/types";
@@ -12,12 +13,14 @@ const Glyph = () => (
 );
 
 export function Home({
-  onOpen, recent, busy, error,
+  onOpen, recent, busy, error, errorAction,
 }: {
   onOpen: (path: string) => void;
   recent: LibraryItem[];
   busy: boolean;
   error: string | null;
+  /** Rendered under the error: the way to send a report about it. */
+  errorAction?: ReactNode;
 }) {
   const [hot, setHot] = useState(false);
 
@@ -66,6 +69,7 @@ export function Home({
       {error && (
         <div style={{ marginTop: "var(--s6)", width: "100%" }}>
           <Note strong heading="Could not open">{error}</Note>
+          {errorAction}
         </div>
       )}
 

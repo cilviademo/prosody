@@ -39,6 +39,7 @@ export interface Project {
   durationSeconds: number | null;
   timeSignature: [number, number];
   flVersion: string | null;
+  backend: string;
   state: string;
   counts: {
     patterns: number; channels: number; plugins: number; mixerTracks: number;
@@ -104,6 +105,7 @@ export interface Env {
   platform: string; python: string; pyflp: string; compatShim: boolean;
   flExecutable: string | null; flDiscovery: string; ffmpeg: string | null;
   flArchitecture: string | null; flArchitectureOk: boolean;
+  flFileVersion: string | null; renderTested: boolean;
   canRender: boolean; renderReason: string;
   stemStrategy: string | null; stemReason: string;
   workspace: string; exportRoot: string; providers: string[];

@@ -129,6 +129,10 @@ class FlpSpec:
     clips: list[ClipSpec] = field(default_factory=list)
     track_names: list[str] = field(default_factory=list)
     mixer_names: list[str] = field(default_factory=list)
+    #: Channel-rack display groups (FL 2024+). FL 2026 writes several; the
+    #: studio-PC project that broke PyFLP carried "Unsorted" and
+    #: "Loop Starter #1". At least one is required or PyFLP raises IndexError.
+    display_groups: list[str] = field(default_factory=lambda: ["Unsorted"])
 
 
 def _note_bytes(note: NoteSpec) -> bytes:
@@ -173,7 +177,8 @@ def build_flp(spec: FlpSpec) -> bytes:
 
     # PyFLP indexes DisplayGroup by channel group number, so at least one must
     # exist or channel iteration raises IndexError.
-    body += _event(DISPLAY_GROUP_NAME, text="Unsorted")
+    for group in spec.display_groups or ["Unsorted"]:
+        body += _event(DISPLAY_GROUP_NAME, text=group)
 
     # PyFLP divides the mixer into inserts on InsertID.Output, so a name alone
     # yields nothing; each insert needs its terminating Output event.
@@ -205,9 +210,13 @@ def build_flp(spec: FlpSpec) -> bytes:
         body += _event(
             ARRANGEMENT_PLAYLIST, data=b"".join(_clip_bytes(c) for c in spec.clips)
         )
-    for name in spec.track_names:
+    # PyFLP divides the arrangement at each TrackID.Data event, so Data opens a
+    # track and the Name that follows belongs to it — that is the order FL
+    # writes. Name-first put every name into track 0, which the golden files
+    # had been faithfully recording.
+    for index, name in enumerate(spec.track_names):
+        body += _event(TRACK_DATA, data=struct.pack("<IIIB", index + 1, 0, 0, 1))
         body += _event(TRACK_NAME, text=name)
-        body += _event(TRACK_DATA, data=struct.pack("<IIIB", 1, 0, 0, 1))
     # Terminates the last arrangement's event subtree.
     body += _event(ARRANGEMENTS_CURRENT, 0)
 

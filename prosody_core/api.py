@@ -18,6 +18,7 @@ import sys
 import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +173,7 @@ def _project_payload(path: Path, workspace: Workspace) -> dict[str, Any]:
         "durationSeconds": project.duration_seconds,
         "timeSignature": list(project.time_signature),
         "flVersion": project.fl_version,
+        "backend": project.backend,
         "state": analysis.state.value,
         "counts": {
             "patterns": len(project.patterns),
@@ -245,6 +247,25 @@ def _remember(
 # --------------------------------------------------------------------------- #
 
 
+def _exe_fingerprint(path: Path) -> str | None:
+    """Size and mtime: cheap, and an updated or reinstalled FL changes both."""
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return f"{st.st_size}:{st.st_mtime_ns}"
+
+
+def _render_tested(workspace: Workspace, env: Any) -> bool:
+    record = workspace.load_settings().get("fl_test")
+    if not isinstance(record, dict) or not record.get("passed") or env.fl_executable is None:
+        return False
+    return (
+        record.get("exe") == str(env.fl_executable)
+        and record.get("fingerprint") == _exe_fingerprint(env.fl_executable)
+    )
+
+
 def h_environment(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     env = describe(workspace.load_settings())
     can_render, render_reason = render_fl.availability(env)
@@ -263,6 +284,10 @@ def h_environment(payload: dict[str, Any], workspace: Workspace) -> dict[str, An
         "stemReason": stem_reason,
         "flArchitecture": env.fl_architecture,
         "flArchitectureOk": env.fl_architecture_ok,
+        "flFileVersion": env.fl_file_version,
+        # "Ready" is a claim about rendering, and only a passing Test against
+        # the executable that is still there can back it (TESTING_HANDOFF P1.1).
+        "renderTested": _render_tested(workspace, env),
         "workspace": str(workspace.root),
         "exportRoot": str(workspace.export_root()),
         "providers": sorted(PROVIDERS),
@@ -557,6 +582,22 @@ def h_jobs_clear_partials(payload: dict[str, Any], workspace: Workspace) -> dict
     return {"removed": [str(p) for p in removed], "count": len(removed)}
 
 
+def h_events(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Every event id in a project: counts, sizes, name previews.
+
+    No note data, plugin state or sample paths — safe to paste into a report.
+    Works on files the parser cannot read, which is when it is needed.
+    """
+    from prosody_core.parse.events_dump import as_text, inventory
+
+    path = validate_source_path(Path(payload["path"]))
+    with temporary_copy(path, workspace.cache) as copy:
+        inv = inventory(copy.path)
+    inv["file"] = path.name
+    inv["report"] = as_text(inv)
+    return inv
+
+
 def h_system_check(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     """Every capability, its verdict and why (HARDENING P1.4)."""
     result = systemcheck.run(workspace)
@@ -659,13 +700,27 @@ def h_test_fl(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
             "rendered": False,
         }
 
-    result = render_fl.test_connection(env, timeout=int(payload.get("timeout", 600)))
+    project = payload.get("project")
+    result = render_fl.test_connection(
+        env, timeout=int(payload.get("timeout", 600)),
+        project=Path(project) if project else None,
+    )
+    workspace.save_settings({"fl_test": {
+        "exe": str(env.fl_executable),
+        "fingerprint": _exe_fingerprint(env.fl_executable),
+        "passed": result.ok,
+        "at": datetime.now(timezone.utc).isoformat(),
+        "detail": result.detail,
+    }})
     return {
         "ok": result.ok,
         "path": str(env.fl_executable),
         "detail": result.detail,
         "seconds": round(result.seconds, 1),
         "rendered": result.ok,
+        "duration": result.duration,
+        "expected": result.expected,
+        "command": result.command,
     }
 
 
@@ -681,6 +736,7 @@ HANDLERS: dict[str, Handler] = {
     "library.forget": h_library_forget,
     "library.rebuild": h_library_rebuild,
     "system.check": h_system_check,
+    "project.events": h_events,
     "jobs.interrupted": h_jobs_interrupted,
     "jobs.discard": h_jobs_discard,
     "jobs.clearPartials": h_jobs_clear_partials,
