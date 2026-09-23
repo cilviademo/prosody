@@ -68,6 +68,12 @@ jobs:
           key: ${{ runner.os }}-cargo-wincheck-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-wincheck-
 
+      # tauri-winres compiles the .rc (icon, version block) with llvm-rc when
+      # the host is not Windows; ubuntu-latest ships LLVM without the
+      # unversioned llvm-rc on PATH, and the build script panics without it.
+      - name: Install llvm-rc for the Windows resource compile
+        run: sudo apt-get update -q && sudo apt-get install -y -q llvm
+
       - name: Type-check the Windows-only Rust
         working-directory: apps/desktop/src-tauri
         run: cargo check --target x86_64-pc-windows-msvc
