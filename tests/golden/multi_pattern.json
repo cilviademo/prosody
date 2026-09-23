@@ -352,6 +352,8 @@
       "severity": "info"
     }
   ],
+  "evidence_status": "EXTRACTED",
+  "validation_status": "UNVERIFIED",
   "_health_status": "REQUIRES_FREEZE",
   "_state": "loop"
 }

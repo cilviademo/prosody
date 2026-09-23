@@ -10,6 +10,8 @@ inside ArrangementPlan, which is a human/LLM-facing document.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Annotated, Literal
@@ -104,6 +106,46 @@ class Severity(str, Enum):
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
+
+
+class EvidenceStatus(str, Enum):
+    """How a value came to be (ARCHITECTURE_NOTES item 1, ADR-0006).
+
+    Orthogonal to how far it has been checked, which is ValidationLevel;
+    the two are never folded into one field.
+    """
+
+    EXTRACTED = "EXTRACTED"          # read from the file as-is
+    MEASURED = "MEASURED"            # computed from the file deterministically
+    INFERRED = "INFERRED"            # a classifier's guess, with a confidence
+    GENERATED = "GENERATED"          # produced by the planner
+    USER_APPROVED = "USER_APPROVED"  # the user chose or edited it
+    UNKNOWN = "UNKNOWN"
+
+
+class ValidationLevel(str, Enum):
+    """How far a generated project got, in order (HARDENING P1.1).
+
+    Also the per-value ``validation_status`` (ARCHITECTURE_NOTES item 1):
+    UNVERIFIED until something checks it.
+
+    Each level requires the one before it, and the reached level is shown to
+    the user rather than collapsed into "success" — "a file was produced" and
+    "FL Studio opened it and rendered it" are very different claims.
+    """
+
+    #: The writer produced a file. Nothing has been checked.
+    GENERATED = "GENERATED"
+    #: Re-parsed, and every count that must match the source does.
+    STRUCTURALLY_VALIDATED = "STRUCTURALLY_VALIDATED"
+    #: An independent parser confirmed only permitted differences.
+    SEMANTICALLY_VALIDATED = "SEMANTICALLY_VALIDATED"
+    #: FL Studio opened it and rendered it to the expected length.
+    FL_STUDIO_VALIDATED = "FL_STUDIO_VALIDATED"
+    #: The writer produced a file that failed a check. Not fit to hand over.
+    FAILED = "FAILED"
+    #: Nothing has checked this value yet.
+    UNVERIFIED = "UNVERIFIED"
 
 
 # --------------------------------------------------------------------------- #
@@ -203,6 +245,8 @@ class KeyGuess(_Base):
     root: str
     mode: Literal["major", "minor"]
     confidence: float = Field(ge=0.0, le=1.0)
+    evidence_status: EvidenceStatus = EvidenceStatus.INFERRED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
 
 class ParseWarning(_Base):
@@ -244,6 +288,9 @@ class BeatProject(_Base):
         description="Event ids PyFLP had no model for. Preserved, never dropped.",
     )
     parse_warnings: tuple[ParseWarning, ...] = ()
+    #: Every value in a BeatProject is read from the file; nothing is inferred.
+    evidence_status: EvidenceStatus = EvidenceStatus.EXTRACTED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
     @property
     def note_count(self) -> int:
@@ -313,6 +360,8 @@ class RoleAssignment(_Base):
     sources: tuple[str, ...] = Field(
         default=(), description="Which signals contributed, e.g. channel_name"
     )
+    evidence_status: EvidenceStatus = EvidenceStatus.INFERRED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
     @property
     def is_confident(self) -> bool:
@@ -329,6 +378,8 @@ class Analysis(_Base):
     state: ProjectState = ProjectState.EMPTY
     roles: tuple[RoleAssignment, ...] = ()
     completion_estimate: float = Field(default=0.0, ge=0.0, le=1.0)
+    evidence_status: EvidenceStatus = EvidenceStatus.INFERRED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
     @property
     def confident_roles(self) -> tuple[RoleAssignment, ...]:
@@ -372,6 +423,8 @@ class PlaylistOp(_Base):
     track: int | None = None
     start_bar: int | None = Field(default=None, ge=1)
     bars: int | None = Field(default=None, ge=1)
+    evidence_status: EvidenceStatus = EvidenceStatus.GENERATED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
 
 class Section(_Base):
@@ -381,6 +434,8 @@ class Section(_Base):
     energy: float = Field(ge=0.0, le=1.0)
     active_roles: tuple[Role, ...] = ()
     dropout_bars: int = Field(default=0, ge=0)
+    evidence_status: EvidenceStatus = EvidenceStatus.GENERATED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
 
 class ArrangementPlan(_Base):
@@ -396,6 +451,20 @@ class ArrangementPlan(_Base):
     sections: tuple[Section, ...] = ()
     ops: tuple[PlaylistOp, ...] = ()
     llm_notes: str | None = None
+    evidence_status: EvidenceStatus = EvidenceStatus.GENERATED
+    validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
+
+    @property
+    def operation_set_id(self) -> str:
+        """Names this exact set of operations; equal ops give an equal id.
+
+        Hashed from the ops alone — not the variant letter or the seed — so
+        two plans that would change the file identically share an id.
+        """
+        canonical = json.dumps(
+            [op.model_dump(mode="json") for op in self.ops], sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
     @model_validator(mode="after")
     def _ops_within_permission_level(self) -> ArrangementPlan:
@@ -450,26 +519,6 @@ class GenreProfile(_Base):
 # --------------------------------------------------------------------------- #
 
 
-class ValidationLevel(str, Enum):
-    """How far a generated project got, in order (HARDENING P1.1).
-
-    Each level requires the one before it, and the reached level is shown to
-    the user rather than collapsed into "success" — "a file was produced" and
-    "FL Studio opened it and rendered it" are very different claims.
-    """
-
-    #: The writer produced a file. Nothing has been checked.
-    GENERATED = "GENERATED"
-    #: Re-parsed, and every count that must match the source does.
-    STRUCTURALLY_VALIDATED = "STRUCTURALLY_VALIDATED"
-    #: An independent parser confirmed only permitted differences.
-    SEMANTICALLY_VALIDATED = "SEMANTICALLY_VALIDATED"
-    #: FL Studio opened it and rendered it to the expected length.
-    FL_STUDIO_VALIDATED = "FL_STUDIO_VALIDATED"
-    #: The writer produced a file that failed a check. Not fit to hand over.
-    FAILED = "FAILED"
-
-
 class ValidationResult(_Base):
     schema_version: str = SCHEMA_VERSION
     project_id: str
@@ -516,6 +565,34 @@ class ArtifactKind(str, Enum):
     REPORT = "report"
 
 
+class LineageStage(str, Enum):
+    """Where a derivative sits in the only chain that exists.
+
+    ORIGINAL is never mutated. A plan is PROPOSED; the one the user chose to
+    build becomes USER_WORKING; what lands in the export folder is EXPORTED.
+    """
+
+    ORIGINAL = "ORIGINAL"
+    PROPOSED = "PROPOSED"
+    USER_WORKING = "USER_WORKING"
+    EXPORTED = "EXPORTED"
+
+
+class Lineage(_Base):
+    """What a derivative came from (ARCHITECTURE_NOTES item 2).
+
+    ``parent_hash`` is the SHA-256 of the original file at the moment the
+    build read it, so a derivative can always be tied to the exact bytes it
+    was made from, and ``operation_set_id`` names the exact set of operations
+    that produced it — two builds with the same ops share an id.
+    """
+
+    parent_project_id: str
+    parent_hash: str
+    operation_set_id: str | None = None
+    stage: LineageStage = LineageStage.EXPORTED
+
+
 class Artifact(_Base):
     """One file this application produced."""
 
@@ -523,6 +600,7 @@ class Artifact(_Base):
     path: str
     label: str
     bytes: int = 0
+    lineage: Lineage | None = None
 
 
 class StageStatus(str, Enum):
@@ -544,6 +622,7 @@ class StageResult(_Base):
 
 
 class BuildResult(_Base):
+    lineage: Lineage | None = None
     schema_version: str = SCHEMA_VERSION
     project_id: str
     out_dir: str

@@ -44,6 +44,8 @@
       "severity": "warning"
     }
   ],
+  "evidence_status": "EXTRACTED",
+  "validation_status": "UNVERIFIED",
   "_health_status": "BLOCKED",
   "_state": "empty"
 }

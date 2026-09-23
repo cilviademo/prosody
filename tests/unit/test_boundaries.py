@@ -78,7 +78,8 @@ def test_the_package_never_calls_print(path: Path):
 def test_the_domain_model_depends_on_nothing_but_pydantic_and_the_stdlib():
     """ARCHITECTURE.md: no third-party object may appear in a field type."""
     allowed = {"pydantic", "prosody_core", "__future__", "typing", "enum",
-               "datetime", "collections", "abc", "re", "functools", "pathlib"}
+               "datetime", "collections", "abc", "re", "functools", "pathlib",
+               "hashlib", "json"}   # stdlib, used to derive operation_set_id
     for path in (PACKAGE / "model").rglob("*.py"):
         extra = imported_roots(path) - allowed
         assert not extra, f"model/{path.name} imports {extra}"

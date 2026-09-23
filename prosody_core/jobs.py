@@ -44,8 +44,11 @@ class JobManifest:
     started_at: str = field(default_factory=_now)
     finished_at: str | None = None
     stages: list[dict[str, Any]] = field(default_factory=list)
-    outputs: list[dict[str, str]] = field(default_factory=list)
+    outputs: list[dict[str, Any]] = field(default_factory=list)
     validation_level: str | None = None
+    #: Lineage (ARCHITECTURE_NOTES item 2). parent_hash is source_hash.
+    parent_project_id: str | None = None
+    operation_set_id: str | None = None
 
     @property
     def path(self) -> Path:
@@ -55,6 +58,9 @@ class JobManifest:
         return {
             "sourcePath": self.source_path,
             "sourceHash": self.source_hash,
+            "parentProjectId": self.parent_project_id,
+            "parentHash": self.source_hash,
+            "operationSetId": self.operation_set_id,
             "operation": self.operation,
             "options": self.options,
             "workingCopy": self.working_copy,

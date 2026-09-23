@@ -237,6 +237,8 @@
       "severity": "info"
     }
   ],
+  "evidence_status": "EXTRACTED",
+  "validation_status": "UNVERIFIED",
   "_health_status": "READY",
   "_state": "partial"
 }

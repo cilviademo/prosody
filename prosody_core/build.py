@@ -37,6 +37,9 @@ from prosody_core.model.schemas import (
     ArtifactKind,
     BeatProject,
     BuildResult,
+    EvidenceStatus,
+    Lineage,
+    LineageStage,
     OutputTier,
     PermissionLevel,
     StageResult,
@@ -80,6 +83,8 @@ class _Recorder:
     #: Set once the output folder exists, so an interrupted build is
     #: self-describing (HARDENING P0.4).
     manifest: JobManifest | None = None
+    #: Applied to every artifact recorded without one (ARCHITECTURE_NOTES 2).
+    lineage: Lineage | None = None
 
     def begin(self, name: str, detail: str = "") -> None:
         if self.progress:
@@ -89,6 +94,11 @@ class _Recorder:
         self, name: str, status: StageStatus, detail: str = "",
         artifacts: tuple[Artifact, ...] = (),
     ) -> None:
+        if self.lineage is not None:
+            artifacts = tuple(
+                a if a.lineage is not None else a.model_copy(update={"lineage": self.lineage})
+                for a in artifacts
+            )
         self.stages.append(
             StageResult(name=name, status=status, detail=detail, artifacts=artifacts)
         )
@@ -103,11 +113,14 @@ class SafeModeError(RuntimeError):
     """Raised when a write is attempted in Safe Mode."""
 
 
-def artifact(kind: ArtifactKind, path: Path, label: str) -> Artifact:
+def artifact(
+    kind: ArtifactKind, path: Path, label: str, lineage: Lineage | None = None,
+) -> Artifact:
     path = Path(path)
     return Artifact(
         kind=kind, path=str(path), label=label,
         bytes=path.stat().st_size if path.is_file() else 0,
+        lineage=lineage,
     )
 
 
@@ -195,10 +208,15 @@ def build(
     for sub in ("preview", "stems", "midi", "data", "reports"):
         (out_dir / sub).mkdir(parents=True, exist_ok=True)
 
+    recorder.lineage = Lineage(
+        parent_project_id=project.id, parent_hash=source_hash,
+        stage=LineageStage.EXPORTED,
+    )
     recorder.manifest = JobManifest(
         out_dir=out_dir,
         source_path=str(source),
         source_hash=source_hash,
+        parent_project_id=project.id,
         operation="arrange" if options.arrange else "extract",
         options={
             "genre": options.genre, "structure": options.structure,
@@ -239,6 +257,17 @@ def build(
                 )
             )
             plan = next((p for p in plans if p.variant == options.variant), plans[0])
+            # Choosing a variant is the user's decision; the other variants
+            # stay GENERATED/PROPOSED (ARCHITECTURE_NOTES items 1 and 2).
+            plan = plan.model_copy(update={"evidence_status": EvidenceStatus.USER_APPROVED})
+            # The chosen plan is the user's working copy; everything from here
+            # descends from this exact operation set.
+            recorder.lineage = recorder.lineage.model_copy(
+                update={"operation_set_id": plan.operation_set_id}
+            ) if recorder.lineage else None
+            if recorder.manifest is not None:
+                recorder.manifest.operation_set_id = plan.operation_set_id
+                recorder.manifest.write()
             _dump(out_dir / "data" / "arrangement.json", plan)
             recorder.finish(
                 "Planning arrangement", StageStatus.OK,
@@ -264,6 +293,10 @@ def build(
                 )
                 _dump(out_dir / "reports" / "validation.json", result)
                 validation_level = result.level.value
+                # The plan's own validation status follows what the writer
+                # proved about the file it produced.
+                plan = plan.model_copy(update={"validation_status": result.level})
+                _dump(out_dir / "data" / "arrangement.json", plan)
                 (out_dir / "reports" / "operations.log").write_text(
                     "\n".join(report.operations) + "\n", encoding="utf-8"
                 )
@@ -499,6 +532,7 @@ def build(
     message = _message(tier, options)
 
     result = BuildResult(
+        lineage=recorder.lineage,
         project_id=project.id,
         out_dir=str(out_dir),
         tier=tier,
@@ -517,7 +551,13 @@ def build(
     # looks for (HARDENING P0.4).
     if recorder.manifest is not None:
         recorder.manifest.outputs = [
-            {"path": str(a.path), "kind": a.kind.value} for a in recorder.artifacts
+            {
+                "path": str(a.path), "kind": a.kind.value,
+                "parentProjectId": a.lineage.parent_project_id if a.lineage else None,
+                "parentHash": a.lineage.parent_hash if a.lineage else None,
+                "operationSetId": a.lineage.operation_set_id if a.lineage else None,
+            }
+            for a in recorder.artifacts
         ]
         recorder.manifest.finish(validation_level)
     return result
