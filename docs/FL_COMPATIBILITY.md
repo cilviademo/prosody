@@ -6,10 +6,10 @@ that is not listed has not been tried, and Prosody makes no claim about it.
 This table is empty of real rows on purpose. Writing optimistic entries here
 would be the same mistake as marking an untested acceptance step as WORKING.
 
-| FL version | Parse | Write derivative | Opens generated `.flp` | Render | MIDI export | ZIP export | Stems | Tested on |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 20.9.2.2963 | pass¹ | — | — | fail² | — | — | — | 2026-09-22, studio PC, release v0.1.0 |
-| 2026 (loop_test.flp) | fail³ → fallback untested | — | — | fail² | — | — | — | 2026-09-22, studio PC, release v0.1.0 |
+| FL version | Parse | Round-trip (T2)⁴ | Write derivative | Opens generated `.flp` | Render | MIDI export | ZIP export | Stems | Tested on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 20.9.2.2963 | pass¹ | pending⁴ | — | — | fail² | — | — | — | 2026-09-22, studio PC, release v0.1.0 |
+| 2026 (loop_test.flp) | fail³ → fallback untested | pending⁴ | — | — | fail² | — | — | — | 2026-09-22, studio PC, release v0.1.0 |
 
 ¹ Parsed (90 channels, 127 mixer tracks, 260 clips, 39 missing samples) but
 reported 0 patterns / 0 notes / 1 plugin for a session whose channels are named
@@ -28,6 +28,19 @@ its own event reader when PyFLP raises; that fallback is verified on a
 2026-shaped fixture and on a reproduction of the exception, **not yet on the
 real file**. `flpf events loop_test.flp` (or Copy event inventory in the app)
 produces the inventory that will say what else FL 2026 writes.
+
+⁴ The round-trip spike from EXECUTE.md T2 (parse → rewrite unchanged → compare
+bytes) runs automatically the first time a file is inspected, as the
+`write_compatibility` health row, which reads one of: "rewrite reproduces the
+file byte for byte (N events)", "rewrite differs by N bytes of encoding but
+carries every event unchanged" (same events, FL wrote a varint long-form), or a
+failure ("the rewritten file's events differ from the original's" / "does not
+parse back"). On every synthetic fixture in the suite the rewrite is
+byte-identical.
+Neither real file has been inspected since the row was added (2026-09-23), so
+both verdicts are pending the studio PC; the first Inspect of each fills the
+cell. A verdict of "differs" on the 2026 file is the expected outcome if it
+carries events the writer does not yet know, and would be the next P0.
 
 ## What has been tested instead
 

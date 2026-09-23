@@ -1,6 +1,6 @@
 # CURRENT_STATUS
 
-Prosody v0.1.0 · 2026-09-20
+Prosody v0.1.0 · 2026-09-23
 
 **This session ran on Linux in a container.** Windows binaries need Windows, so
 per RELEASE.md section 0 all code and configuration work happened here and the
@@ -57,6 +57,33 @@ retried through transient locks, and steered towards a local default that the
 shell and the core agree on; missing samples can be located by filename without
 touching the project; and an audio-clip session says what it is. Every one of
 these is verified on fixtures and synthetic paths, none yet on the studio PC.
+
+## ARCHITECTURE_NOTES, 2026-09-23
+
+All five "implement now" items are on `main`, gated by a green unit tier
+(779 passed, 2 Windows-only skips) and typecheck. Nothing listed under
+"Explicitly deferred" was built; those items are recorded in ROADMAP.md.
+
+- **WORKING (fixture-verified):** evidence/validation as two fields
+  (ADR-0006); lineage on every artifact and in `job.json`; three-layer
+  arrangement with `compile_plan` as the only B→C route and `operations.json`
+  as the record (ADR-0007); twelve pipeline stages with hashes in `job.json`;
+  Resume from the interrupted-job banner, reusing only stages whose input,
+  configuration and output hashes match; synthetic ground-truth pair with a
+  planner-quality test and an AST proof that the finished song never reaches
+  the planner.
+- **PARTIAL:** ground truth is synthetic. The real pair (`loop_test.flp` as A,
+  a finished project as B) is still owed and can only be built on the PC once
+  P0.1 is confirmed on the real file.
+- **NOT YET WORKING (not attempted here):** Resume on a genuinely interrupted
+  job on Windows; AUDIO_ANALYZED and MIXER_ANALYZED are recorded SKIPPED by
+  design in this version.
+
+Round-trip spike (EXECUTE.md T2): byte-identical on every synthetic fixture
+through the in-memory rewrite; the verdicts for `loop_test.flp` and the 20.9
+project are recorded in docs/FL_COMPATIBILITY.md as **pending the PC** and
+will be filled by the first Inspect of each file (the `write_compatibility`
+health row is answered live per file).
 
 ## HARDENING acceptance gate
 
@@ -267,11 +294,17 @@ by tests (step 11). None of that substitutes for the real thing.
 
 ## NEXT PRIORITY
 
-**Push a tag, download the ZIP, and run section 10 on the studio PC.**
+**Install from `main` on the studio PC and run TESTING_HANDOFF.md section 5.**
 
 ```
-git tag v0.1.0 && git push origin v0.1.0
+irm https://raw.githubusercontent.com/cilviademo/prosody/main/scripts/install.ps1 | iex
 ```
+
+The three answers this session could not produce, and that unblock the rest:
+the FL 2026 Test Connection output (exact argv and whether a WAV appeared),
+the event inventory for `loop_test.flp` (Copy event inventory, or
+`flpf events loop_test.flp`), and FL's own pattern count and generator list
+for the 20.9 project (P1.2).
 
 Then, in order:
 
