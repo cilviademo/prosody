@@ -6,6 +6,15 @@ Prosody v0.1.0 · 2026-09-23
 per RELEASE.md section 0 all code and configuration work happened here and the
 `windows-latest` GitHub Actions job produces the ZIP and installer.
 
+**The published v0.1.0 artefacts are rebuilt from `main` at `429b385`
+(2026-09-23 03:03Z).** The ZIP downloaded from the release page matches
+`SHA256SUMS.txt` and its bundled `build-info.json` names that commit. The
+`ci` workflow is green on `main` for the first time since the Windows-target
+Rust type-check was added: every earlier run failed at that one step because
+`ubuntu-latest` has no `llvm-rc` on PATH (fixed by installing `llvm`); lint,
+tests and the release build were green throughout, so no shipped artefact was
+affected, but the red badge was real and is now gone.
+
 **The release now exists.** <https://github.com/cilviademo/prosody/releases/tag/v0.1.0>
 carries `Prosody-v0.1.0-Windows.zip` (20.1 MB) and
 `Prosody_0.1.0_x64-setup.exe` (17.5 MB), built by run 35538426564.
