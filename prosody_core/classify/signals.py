@@ -18,6 +18,9 @@ Design notes:
 
 from __future__ import annotations
 
+#: Bump when classification changes in a way that would give a different
+#: answer for the same file. A resumed build reuses an earlier analysis only
+#: when this matches (ARCHITECTURE_NOTES item 4).
 import math
 import re
 from collections import defaultdict
@@ -35,6 +38,10 @@ from prosody_core.model.schemas import (
     ProjectState,
     RoleAssignment,
 )
+
+#: Bumped whenever classification rules change, so stage hashes invalidate
+#: (ARCHITECTURE_NOTES item 4).
+ANALYSIS_VERSION = "2026.09.1"
 
 #: Weight of each signal in the vote. Names are strong because producers do
 #: label their drums; musical shape is strong because names are often absent.

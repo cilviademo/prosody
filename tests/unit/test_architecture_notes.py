@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from prosody_core.api import HANDLERS
+from prosody_core.classify.signals import ANALYSIS_VERSION
 from prosody_core.fs.safety import sha256_file
 from prosody_core.model.schemas import (
     Analysis,
@@ -120,3 +121,53 @@ def test_existing_json_without_the_new_fields_still_validates(make_flp):
         raw.pop(key, None)
     restored = BeatProject.model_validate(raw)
     assert restored.evidence_status is EvidenceStatus.EXTRACTED
+
+
+# --- item 4 ------------------------------------------------------------------------ #
+
+def _pipeline(out_dir: str) -> dict[str, dict]:
+    job = json.loads((Path(out_dir) / "job.json").read_text(encoding="utf-8"))
+    return {rec["stage"]: rec for rec in job["pipeline"]}
+
+
+def test_every_build_records_named_stages_with_hashes(make_flp, workspace):
+    path = make_flp(full_kit())
+    result = HANDLERS["build.run"]({"path": str(path), "genre": "rnb", "arrange": True, "midi": True}, workspace)
+    stages = _pipeline(result["outDir"])
+
+    for name in ("INGESTED", "PROJECT_PARSED", "MIDI_ANALYZED", "STRUCTURE_INFERRED",
+                 "ASSETS_RESOLVED", "ARRANGEMENT_READY", "OPTIONS_GENERATED",
+                 "USER_REVIEWED", "PROJECT_COMPILED", "EXPORT_VALIDATED"):
+        assert stages[name]["state"] == "COMPLETED", name
+        assert stages[name]["input_hash"] and stages[name]["output_hash"], name
+        assert stages[name]["started_at"] and stages[name]["completed_at"], name
+        assert stages[name]["configuration_hash"], name
+    assert stages["INGESTED"]["input_hash"] == sha256_file(path)
+    assert stages["AUDIO_ANALYZED"]["state"] == "SKIPPED"
+    assert stages["MIXER_ANALYZED"]["state"] == "SKIPPED"
+    assert {s["analysis_version"] for s in stages.values()} == {ANALYSIS_VERSION}
+
+
+def test_resuming_reuses_stages_whose_inputs_did_not_change(make_flp, workspace):
+    path = make_flp(full_kit())
+    first = HANDLERS["build.run"]({"path": str(path), "genre": "rnb", "arrange": True, "midi": True}, workspace)
+    second = HANDLERS["jobs.resume"]({"outDir": first["outDir"]}, workspace)
+    assert second["outDir"] != first["outDir"], "a resume is a new job, the old one stays intact"
+
+    before, after = _pipeline(first["outDir"]), _pipeline(second["outDir"])
+    for name in ("PROJECT_PARSED", "MIDI_ANALYZED", "USER_REVIEWED"):
+        assert after[name]["state"] == "RESUMED", name
+        assert after[name]["output_hash"] == before[name]["output_hash"], name
+    assert after["PROJECT_COMPILED"]["state"] == "COMPLETED"
+    assert after["EXPORT_VALIDATED"]["state"] == "COMPLETED"
+
+
+def test_a_changed_configuration_invalidates_the_resume(make_flp, workspace):
+    path = make_flp(full_kit())
+    first = HANDLERS["build.run"]({"path": str(path), "genre": "rnb", "arrange": True, "midi": True}, workspace)
+    payload = {"path": str(path), "genre": "trap", "arrange": True, "midi": True,
+               "resumeFrom": first["outDir"]}
+    second = HANDLERS["build.run"](payload, workspace)
+    after = _pipeline(second["outDir"])
+    assert after["USER_REVIEWED"]["state"] == "COMPLETED", "a different genre is a different plan"
+    assert after["USER_REVIEWED"]["configuration_hash"] != _pipeline(first["outDir"])["USER_REVIEWED"]["configuration_hash"]

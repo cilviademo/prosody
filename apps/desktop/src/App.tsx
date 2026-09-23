@@ -339,6 +339,19 @@ export default function App() {
             </Button>
             <Button
               onClick={async () => {
+                // Reuses every stage whose hashes still match; re-verifies
+                // the source first; writes to a new folder.
+                const outcome = await api.resumeJob(interrupted[0].outDir);
+                setOutcome(outcome);
+                setTab("finish");
+                setStep("result");
+                setInterrupted((await api.interrupted()).interrupted);
+              }}
+            >
+              Resume
+            </Button>
+            <Button
+              onClick={async () => {
                 await api.discardJob(interrupted[0].outDir);
                 setInterrupted((await api.interrupted()).interrupted);
               }}

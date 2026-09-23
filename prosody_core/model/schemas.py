@@ -483,6 +483,52 @@ class MutationOp(_Base):
     result: str | None = None
 
 
+class PipelineStage(str, Enum):
+    """The named stages of a build (ARCHITECTURE_NOTES item 4), in order."""
+
+    INGESTED = "INGESTED"
+    PROJECT_PARSED = "PROJECT_PARSED"
+    ASSETS_RESOLVED = "ASSETS_RESOLVED"
+    MIDI_ANALYZED = "MIDI_ANALYZED"
+    AUDIO_ANALYZED = "AUDIO_ANALYZED"
+    MIXER_ANALYZED = "MIXER_ANALYZED"
+    STRUCTURE_INFERRED = "STRUCTURE_INFERRED"
+    ARRANGEMENT_READY = "ARRANGEMENT_READY"
+    OPTIONS_GENERATED = "OPTIONS_GENERATED"
+    USER_REVIEWED = "USER_REVIEWED"
+    PROJECT_COMPILED = "PROJECT_COMPILED"
+    EXPORT_VALIDATED = "EXPORT_VALIDATED"
+
+
+class StageState(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    RESUMED = "RESUMED"      # output reused from an earlier build; hashes matched
+    SKIPPED = "SKIPPED"      # not applicable, and it says why
+    FAILED = "FAILED"
+
+
+class StageRecord(_Base):
+    """One pipeline stage in job.json, with what would let it be resumed.
+
+    A later build may reuse this stage's output only if ``input_hash``,
+    ``analysis_version`` and ``configuration_hash`` all match: the same
+    bytes, analysed the same way, with the same choices.
+    """
+
+    stage: PipelineStage
+    state: StageState = StageState.PENDING
+    input_hash: str | None = None
+    output_hash: str | None = None
+    analysis_version: str | None = None
+    configuration_hash: str | None = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    detail: str | None = None
+
+
 class OperationSet(_Base):
     """All three layers for one build, written beside arrangement.json.
 

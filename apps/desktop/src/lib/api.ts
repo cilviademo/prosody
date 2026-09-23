@@ -72,6 +72,7 @@ export const api = {
     ),
   interrupted: () =>
     call<{ interrupted: InterruptedJob[]; count: number }>("jobs.interrupted"),
+  resumeJob: (outDir: string) => call<BuildOutcome>("jobs.resume", { outDir }),
   discardJob: (outDir: string) =>
     call<{ discarded: string }>("jobs.discard", { outDir }),
   rebuildLibrary: () =>

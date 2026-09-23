@@ -17,10 +17,11 @@ import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from prosody_core.ai.planner import PlanRequest, get_planner
 from prosody_core.arrange.permissions import PermissionDenied
-from prosody_core.classify.signals import analyse_project
+from prosody_core.classify.signals import ANALYSIS_VERSION, analyse_project
 from prosody_core.env import Environment, describe
 from prosody_core.extract import render_fl
 from prosody_core.extract import stems as stems_module
@@ -44,7 +45,10 @@ from prosody_core.model.schemas import (
     OperationSet,
     OutputTier,
     PermissionLevel,
+    PipelineStage,
+    StageRecord,
     StageResult,
+    StageState,
     StageStatus,
 )
 from prosody_core.parse.pyflp_backend import PyFLPBackend
@@ -87,6 +91,34 @@ class _Recorder:
     manifest: JobManifest | None = None
     #: Applied to every artifact recorded without one (ARCHITECTURE_NOTES 2).
     lineage: Lineage | None = None
+    #: The twelve named pipeline stages, with hashes (ARCHITECTURE_NOTES 4).
+    pipeline: dict[PipelineStage, StageRecord] = field(default_factory=dict)
+    configuration_hash: str | None = None
+
+    def _pipe(self, stage: PipelineStage, **update: Any) -> None:
+        current = self.pipeline.get(stage) or StageRecord(
+            stage=stage, analysis_version=ANALYSIS_VERSION,
+            configuration_hash=self.configuration_hash)
+        self.pipeline[stage] = current.model_copy(update=update)
+        if self.manifest is not None:
+            self.manifest.pipeline = [r.model_dump(mode="json") for r in self.pipeline.values()]
+            self.manifest.write()
+
+    def stage_start(self, stage: PipelineStage, input_hash: str | None) -> None:
+        self._pipe(stage, state=StageState.RUNNING, input_hash=input_hash,
+                   analysis_version=ANALYSIS_VERSION,
+                   configuration_hash=self.configuration_hash, started_at=_now())
+
+    def stage_done(self, stage: PipelineStage, output_hash: str | None, detail: str = "",
+                   resumed: bool = False) -> None:
+        self._pipe(stage, state=StageState.RESUMED if resumed else StageState.COMPLETED,
+                   output_hash=output_hash, detail=detail or None, completed_at=_now())
+
+    def stage_skip(self, stage: PipelineStage, why: str) -> None:
+        self._pipe(stage, state=StageState.SKIPPED, detail=why, completed_at=_now())
+
+    def stage_fail(self, stage: PipelineStage, error: str) -> None:
+        self._pipe(stage, state=StageState.FAILED, error=error, completed_at=_now())
 
     def begin(self, name: str, detail: str = "") -> None:
         if self.progress:
@@ -160,6 +192,7 @@ def build(
     env: Environment | None = None,
     progress: ProgressFn | None = None,
     cache_root: Path | None = None,
+    resume_from: Path | None = None,
 ) -> BuildResult:
     """Run a full build. Always returns a result; never raises for user input."""
     source = Path(source)
@@ -190,13 +223,62 @@ def build(
     except (OSError, SourceChanged) as exc:
         raise SourceChanged(f"could not take a working copy of {source}: {exc}") from exc
 
+    recorder.configuration_hash = configuration_hash(options)
+    recorder.stage_start(PipelineStage.INGESTED, source_hash)
+    recorder.stage_done(PipelineStage.INGESTED, copy.source_hash, f"working copy at {working}")
+
     # -- parse ------------------------------------------------------------- #
     recorder.begin("Preparing project")
-    if project is None:
-        project = backend.parse(working)
-    if analysis is None:
-        analysis = analyse_project(project, classify_state(project))
+    recorder.stage_start(PipelineStage.PROJECT_PARSED, copy.source_hash)
+    parsed_resumed = False
+    if project is not None:
+        parsed_resumed = _reused(resume_from, PipelineStage.PROJECT_PARSED, copy.source_hash,
+                                 recorder.configuration_hash, _digest(project))
+    else:
+        ok, _ = _resumable(resume_from, PipelineStage.PROJECT_PARSED, copy.source_hash,
+                           recorder.configuration_hash)
+        if ok:
+            try:
+                project = BeatProject.model_validate_json(
+                    (Path(resume_from) / "data" / "project.json").read_text(encoding="utf-8"))  # type: ignore[arg-type]
+                parsed_resumed = True
+            except (OSError, ValueError):
+                project = None
+        if project is None:
+            project = backend.parse(working)
+    recorder.stage_done(PipelineStage.PROJECT_PARSED, _digest(project),
+                        f"{len(project.patterns)} patterns, {len(project.channels)} channels",
+                        resumed=parsed_resumed)
+
+    recorder.stage_start(PipelineStage.MIDI_ANALYZED, _digest(project))
+    analysis_resumed = False
+    if analysis is not None:
+        analysis_resumed = _reused(resume_from, PipelineStage.MIDI_ANALYZED, _digest(project),
+                                   recorder.configuration_hash, _digest(analysis))
+    else:
+        ok, _ = _resumable(resume_from, PipelineStage.MIDI_ANALYZED, _digest(project),
+                           recorder.configuration_hash)
+        if ok:
+            try:
+                analysis = Analysis.model_validate_json(
+                    (Path(resume_from) / "data" / "analysis.json").read_text(encoding="utf-8"))  # type: ignore[arg-type]
+                analysis_resumed = True
+            except (OSError, ValueError):
+                analysis = None
+        if analysis is None:
+            analysis = analyse_project(project, classify_state(project))
+    recorder.stage_done(PipelineStage.MIDI_ANALYZED, _digest(analysis),
+                        f"{len(analysis.roles)} role assignments", resumed=analysis_resumed)
+    recorder.stage_skip(PipelineStage.AUDIO_ANALYZED, "no audio analysis in this version")
+    recorder.stage_skip(PipelineStage.MIXER_ANALYZED, "mixer inserts are read, not analysed")
+    recorder.stage_start(PipelineStage.STRUCTURE_INFERRED, _digest(analysis))
+    recorder.stage_done(PipelineStage.STRUCTURE_INFERRED, _digest(analysis),
+                        f"state: {analysis.state.value}", resumed=analysis_resumed)
+
     health = check_project(project, source=working)
+    recorder.stage_start(PipelineStage.ASSETS_RESOLVED, _digest(project))
+    recorder.stage_done(PipelineStage.ASSETS_RESOLVED, _digest(health),
+                        f"{len(health.missing_assets)} missing")
     genre_tag = options.genre if options.arrange else "extract"
     out_dir = prepare_output_dir(export_root, source, genre_tag)
     # The folder name already carries the version; artefacts reuse it verbatim.
@@ -250,15 +332,46 @@ def build(
     if options.arrange:
         recorder.begin("Planning arrangement")
         try:
-            planner = get_planner(str(_setting(env, "rules")))
-            plans = planner.plan(
-                PlanRequest(
-                    project=project, analysis=analysis, genre=options.genre,
-                    structure=options.structure, level=options.level,
-                    variants=3, seed=options.seed,
+            plan_input = _digest(analysis)
+            recorder.stage_start(PipelineStage.ARRANGEMENT_READY, plan_input)
+            ok, _ = _resumable(resume_from, PipelineStage.USER_REVIEWED, plan_input,
+                               recorder.configuration_hash)
+            plan = None
+            planner_name = "reused from the earlier build"
+            if ok:
+                try:
+                    plan = ArrangementPlan.model_validate_json(
+                        (Path(resume_from) / "data" / "arrangement.json").read_text(encoding="utf-8"))  # type: ignore[arg-type]
+                except (OSError, ValueError):
+                    plan = None
+            if plan is not None:
+                recorder.stage_done(PipelineStage.ARRANGEMENT_READY, plan.operation_set_id,
+                                    "reused from the earlier build", resumed=True)
+                recorder.stage_skip(PipelineStage.OPTIONS_GENERATED, "reused the chosen plan")
+                recorder.stage_start(PipelineStage.USER_REVIEWED, plan_input)
+                recorder.stage_done(PipelineStage.USER_REVIEWED, plan.operation_set_id,
+                                    f"variant {plan.variant}", resumed=True)
+            else:
+                planner = get_planner(str(_setting(env, "rules")))
+                planner_name = planner.name
+                plans = planner.plan(
+                    PlanRequest(
+                        project=project, analysis=analysis, genre=options.genre,
+                        structure=options.structure, level=options.level,
+                        variants=3, seed=options.seed,
+                    )
                 )
-            )
-            plan = next((p for p in plans if p.variant == options.variant), plans[0])
+                recorder.stage_done(PipelineStage.ARRANGEMENT_READY,
+                                    _digest([p.operation_set_id for p in plans]),
+                                    f"{len(plans)} variants ({planner.name})")
+                recorder.stage_start(PipelineStage.OPTIONS_GENERATED, plan_input)
+                recorder.stage_done(PipelineStage.OPTIONS_GENERATED,
+                                    _digest([p.operation_set_id for p in plans]),
+                                    ", ".join(p.variant for p in plans))
+                plan = next((p for p in plans if p.variant == options.variant), plans[0])
+                recorder.stage_start(PipelineStage.USER_REVIEWED, plan_input)
+                recorder.stage_done(PipelineStage.USER_REVIEWED, plan.operation_set_id,
+                                    f"variant {plan.variant} chosen")
             # Choosing a variant is the user's decision; the other variants
             # stay GENERATED/PROPOSED (ARCHITECTURE_NOTES items 1 and 2).
             plan = plan.model_copy(update={"evidence_status": EvidenceStatus.USER_APPROVED})
@@ -274,11 +387,12 @@ def build(
             recorder.finish(
                 "Planning arrangement", StageStatus.OK,
                 f"{len(plan.sections)} sections, {plan.total_bars} bars "
-                f"({planner.name})",
+                f"({planner_name})",
                 (artifact(ArtifactKind.JSON,
                           out_dir / "data" / "arrangement.json", "arrangement.json"),),
             )
         except Exception as exc:  # noqa: BLE001 - a bad plan must not kill the build
+            recorder.stage_fail(PipelineStage.ARRANGEMENT_READY, str(exc))
             recorder.finish("Planning arrangement", StageStatus.FAILED, str(exc))
 
         # -- native derivative .flp ---------------------------------------- #
@@ -286,15 +400,23 @@ def build(
             recorder.begin("Writing FL Studio project")
             destination = out_dir / f"{artifact_stem}.flp"
             try:
+                recorder.stage_start(PipelineStage.PROJECT_COMPILED, plan.operation_set_id)
                 report = write_arrangement(
                     working, destination, plan, project, protect=source,
                 )
+                recorder.stage_done(PipelineStage.PROJECT_COMPILED, sha256_file(destination),
+                                    f"{report.clips_written} clips")
+                recorder.stage_start(PipelineStage.EXPORT_VALIDATED, sha256_file(destination))
                 result = validate_derivative(
                     source, destination, project, plan, backend,
                     source_hash=source_hash,
                 )
                 _dump(out_dir / "reports" / "validation.json", result)
                 validation_level = result.level.value
+                if result.passed:
+                    recorder.stage_done(PipelineStage.EXPORT_VALIDATED, _digest(result), result.level.value)
+                else:
+                    recorder.stage_fail(PipelineStage.EXPORT_VALIDATED, result.level_detail or "validation failed")
                 # All three layers, with the writer's result on every
                 # mutation, so any change in the file can be followed back to
                 # the intent that asked for it (ARCHITECTURE_NOTES item 3).
@@ -356,6 +478,8 @@ def build(
                         + (f". The unvalidated file is kept at {kept}" if kept else ""),
                     )
             except (WriteUnsupported, PermissionDenied) as exc:
+                recorder.stage_skip(PipelineStage.PROJECT_COMPILED, f"native write unavailable: {exc}")
+                recorder.stage_skip(PipelineStage.EXPORT_VALIDATED, "nothing compiled to validate")
                 destination.unlink(missing_ok=True)
                 recorder.finish(
                     "Writing FL Studio project", StageStatus.WARNING,
@@ -368,6 +492,12 @@ def build(
                     f"unexpected writer error: {exc} - building an Arrangement "
                     "Pack instead",
                 )
+
+    if not options.arrange:
+        for st in (PipelineStage.ARRANGEMENT_READY, PipelineStage.OPTIONS_GENERATED,
+                   PipelineStage.USER_REVIEWED, PipelineStage.PROJECT_COMPILED,
+                   PipelineStage.EXPORT_VALIDATED):
+            recorder.stage_skip(st, "extract only; no arrangement requested")
 
     # -- MIDI -------------------------------------------------------------- #
     if options.want_midi:
@@ -578,6 +708,73 @@ def build(
         ]
         recorder.manifest.finish(validation_level)
     return result
+
+
+def _now() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _digest(model: object) -> str:
+    """Content hash of a model, for stage input/output hashes."""
+    import hashlib
+
+    payload = model.model_dump_json() if hasattr(model, "model_dump_json") else json.dumps(model, sort_keys=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def configuration_hash(options: BuildOptions) -> str:
+    """The choices that shape a build; a resumed stage needs the same ones."""
+    import hashlib
+
+    fields = {
+        "arrange": options.arrange, "extract": options.extract, "genre": options.genre,
+        "structure": options.structure, "level": int(options.level),
+        "variant": options.variant, "seed": options.seed,
+    }
+    return hashlib.sha256(json.dumps(fields, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _resumable(resume_from: Path | None, stage: PipelineStage, input_hash: str,
+               config_hash: str) -> tuple[bool, dict[str, Any]]:
+    """Whether an earlier build's record for ``stage`` can be reused.
+
+    Reused only when the same bytes were analysed the same way with the same
+    choices: input_hash, analysis_version and configuration_hash all equal.
+    """
+    if resume_from is None:
+        return False, {}
+    try:
+        data = json.loads((Path(resume_from) / "job.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, {}
+    for rec in data.get("pipeline") or []:
+        if rec.get("stage") != stage.value:
+            continue
+        ok = (
+            rec.get("state") in ("COMPLETED", "RESUMED")
+            and rec.get("input_hash") == input_hash
+            and rec.get("analysis_version") == ANALYSIS_VERSION
+            and rec.get("configuration_hash") == config_hash
+        )
+        return ok, data
+    return False, data
+
+
+def _reused(resume_from: Path | None, stage: PipelineStage, input_hash: str,
+            config_hash: str, output_hash: str) -> bool:
+    """Whether a model the caller handed in is byte-for-byte the earlier build's.
+
+    The caller may pre-load project.json/analysis.json from the interrupted
+    folder; the stage is recorded RESUMED only when the earlier record matches
+    on input, configuration and output hashes, never on the caller's word.
+    """
+    ok, data = _resumable(resume_from, stage, input_hash, config_hash)
+    if not ok:
+        return False
+    rec = next((r for r in data.get("pipeline") or [] if r.get("stage") == stage.value), {})
+    return rec.get("output_hash") == output_hash
 
 
 def _op_result(index: int, mutations: tuple[MutationOp, ...]) -> str:

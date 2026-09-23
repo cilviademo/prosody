@@ -49,6 +49,8 @@ class JobManifest:
     #: Lineage (ARCHITECTURE_NOTES item 2). parent_hash is source_hash.
     parent_project_id: str | None = None
     operation_set_id: str | None = None
+    #: The named pipeline stages with hashes (ARCHITECTURE_NOTES item 4).
+    pipeline: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def path(self) -> Path:
@@ -69,6 +71,7 @@ class JobManifest:
             "stages": self.stages,
             "outputs": self.outputs,
             "validationLevel": self.validation_level,
+            "pipeline": self.pipeline,
         }
 
     def write(self) -> None:

@@ -38,6 +38,7 @@ from prosody_core.health.check import check_project, classify_state, human_statu
 from prosody_core.index import db
 from prosody_core.model.roles import Role
 from prosody_core.model.schemas import (
+    Analysis,
     BeatProject,
     HealthStatus,
     LibraryEntry,
@@ -495,8 +496,23 @@ def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
     # it, whether or not the user inspected the project first.
     backend = PyFLPBackend()
     copy = _working_copy(workspace, path)
-    project = _parse_original(backend, copy.path, path)
-    analysis = analyse_project(project, classify_state(project))
+    resume_from = Path(payload["resumeFrom"]) if payload.get("resumeFrom") else None
+    project = analysis = None
+    if resume_from is not None:
+        # Reuse the earlier parse and analysis only for the same bytes.
+        try:
+            prior = json.loads((resume_from / "job.json").read_text(encoding="utf-8"))
+            if prior.get("sourceHash") == copy.source_hash:
+                project = BeatProject.model_validate_json(
+                    (resume_from / "data" / "project.json").read_text(encoding="utf-8"))
+                analysis = Analysis.model_validate_json(
+                    (resume_from / "data" / "analysis.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            project = analysis = None
+    if project is None:
+        project = _parse_original(backend, copy.path, path)
+    if analysis is None:
+        analysis = analyse_project(project, classify_state(project))
     health = check_project(project, source=copy.path)
     key, _ = guess_key(project)
     _remember(workspace, path, project, health.status, key, status="Building")
@@ -509,6 +525,7 @@ def h_build(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
         # can be anywhere the user chose, including a OneDrive-synced Documents,
         # and scratch copies of their projects have no business syncing.
         cache_root=workspace.cache,
+        resume_from=resume_from,
     )
 
     db.record_build(
@@ -576,6 +593,30 @@ def h_jobs_interrupted(payload: dict[str, Any], workspace: Workspace) -> dict[st
     """
     found = jobs.scan(workspace.export_root())
     return {"interrupted": [i.as_dict() for i in found], "count": len(found)}
+
+
+def h_jobs_resume(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
+    """Run an interrupted build again, reusing every stage whose hashes match.
+
+    The source is re-verified first: a changed file means nothing is reused.
+    Output goes to a new versioned folder; the interrupted one is left for
+    the user to discard (ARCHITECTURE_NOTES item 4, HARDENING P0.4).
+    """
+    out_dir = Path(payload["outDir"])
+    data = json.loads((out_dir / "job.json").read_text(encoding="utf-8"))
+    source = validate_source_path(Path(data["sourcePath"]))
+    opts = dict(data.get("options") or {})
+    request = {
+        "path": str(source), "genre": opts.get("genre", "hiphop"),
+        "structure": opts.get("structure", "balanced"), "level": opts.get("level", 0),
+        "variant": opts.get("variant", "A"), "arrange": data.get("operation") == "arrange",
+        "wav": opts.get("wav", True), "mp3": opts.get("mp3", True),
+        "midi": opts.get("midi", True), "zip": opts.get("zip", True),
+        "stems": opts.get("stems", False), "resumeFrom": str(out_dir),
+    }
+    if "seed" in opts:
+        request["seed"] = opts["seed"]
+    return h_build(request, workspace)
 
 
 def h_jobs_discard(payload: dict[str, Any], workspace: Workspace) -> dict[str, Any]:
@@ -791,6 +832,7 @@ HANDLERS: dict[str, Handler] = {
     "samples.locate": h_samples_locate,
     "jobs.interrupted": h_jobs_interrupted,
     "jobs.discard": h_jobs_discard,
+    "jobs.resume": h_jobs_resume,
     "jobs.clearPartials": h_jobs_clear_partials,
     "project.verify": h_verify,
     "fl.test": h_test_fl,
