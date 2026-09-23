@@ -415,7 +415,14 @@ ALLOWED_OPS_BY_LEVEL: dict[PermissionLevel, frozenset[str]] = {
 
 
 class PlaylistOp(_Base):
-    """A single deterministic mutation. The engine executes only these."""
+    """Layer B: a semantic operation in bars (ARCHITECTURE_NOTES item 3).
+
+    Produced by a planner, rules-based or AI. It never touches a file: a
+    deterministic compiler turns it into Layer C mutations in ticks, and only
+    those are applied. ``reason``, ``evidence`` and ``confidence`` say why the
+    planner wanted it; ``result`` is filled in after the compiled mutations
+    are applied.
+    """
 
     op: str
     role: Role | None = None
@@ -423,19 +430,72 @@ class PlaylistOp(_Base):
     track: int | None = None
     start_bar: int | None = Field(default=None, ge=1)
     bars: int | None = Field(default=None, ge=1)
+    reason: str | None = None
+    evidence: tuple[str, ...] = ()
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    permission_level: PermissionLevel | None = None
+    #: Every op acts on a derivative; the original is never touched, so
+    #: nothing here is irreversible. Kept explicit so a future op that is
+    #: (a destructive edit at a higher level) has to say so.
+    reversibility: Literal["reversible", "irreversible"] = "reversible"
+    result: str | None = None
     evidence_status: EvidenceStatus = EvidenceStatus.GENERATED
     validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
 
 
 class Section(_Base):
+    """Layer A: intent — what this stretch of the song is for."""
+
     name: SectionType
     start_bar: int = Field(ge=1)
     bars: int = Field(ge=1)
     energy: float = Field(ge=0.0, le=1.0)
     active_roles: tuple[Role, ...] = ()
     dropout_bars: int = Field(default=0, ge=0)
+    goal: str | None = None
     evidence_status: EvidenceStatus = EvidenceStatus.GENERATED
     validation_status: ValidationLevel = ValidationLevel.UNVERIFIED
+
+
+class MutationKind(str, Enum):
+    """Layer C: FL playlist mutations, in ticks. The writer applies only these."""
+
+    PLACE_PLAYLIST_INSTANCE = "PLACE_PLAYLIST_INSTANCE"
+    OMIT_PLAYLIST_INSTANCE = "OMIT_PLAYLIST_INSTANCE"
+    WRITE_MARKER = "WRITE_MARKER"
+
+
+class MutationOp(_Base):
+    """One concrete change to a derivative's playlist (ARCHITECTURE_NOTES 3).
+
+    Produced only by ``arrange.compile.compile_plan`` from Layer B ops; no
+    planner can emit one, because no plan field holds one. ``from_op`` is the
+    index of the Layer B op it came from; ``result`` is what the writer did.
+    """
+
+    kind: MutationKind
+    from_op: int
+    pattern_id: int | None = None
+    track: int | None = None
+    start_tick: Ticks = 0
+    end_tick: Ticks = 0
+    label: str | None = None
+    result: str | None = None
+
+
+class OperationSet(_Base):
+    """All three layers for one build, written beside arrangement.json.
+
+    A reader can follow any change in the file back through the mutation
+    that made it, the semantic op that asked for it, and the section whose
+    intent it served.
+    """
+
+    schema_version: str = SCHEMA_VERSION
+    operation_set_id: str
+    layer_a: tuple[Section, ...] = ()
+    layer_b: tuple[PlaylistOp, ...] = ()
+    layer_c: tuple[MutationOp, ...] = ()
 
 
 class ArrangementPlan(_Base):

@@ -40,6 +40,8 @@ from prosody_core.model.schemas import (
     EvidenceStatus,
     Lineage,
     LineageStage,
+    MutationOp,
+    OperationSet,
     OutputTier,
     PermissionLevel,
     StageResult,
@@ -293,6 +295,21 @@ def build(
                 )
                 _dump(out_dir / "reports" / "validation.json", result)
                 validation_level = result.level.value
+                # All three layers, with the writer's result on every
+                # mutation, so any change in the file can be followed back to
+                # the intent that asked for it (ARCHITECTURE_NOTES item 3).
+                _dump(
+                    out_dir / "data" / "operations.json",
+                    OperationSet(
+                        operation_set_id=plan.operation_set_id,
+                        layer_a=plan.sections,
+                        layer_b=tuple(
+                            op.model_copy(update={"result": _op_result(i, report.mutations)})
+                            for i, op in enumerate(plan.ops)
+                        ),
+                        layer_c=report.mutations,
+                    ),
+                )
                 # The plan's own validation status follows what the writer
                 # proved about the file it produced.
                 plan = plan.model_copy(update={"validation_status": result.level})
@@ -561,6 +578,15 @@ def build(
         ]
         recorder.manifest.finish(validation_level)
     return result
+
+
+def _op_result(index: int, mutations: tuple[MutationOp, ...]) -> str:
+    """What became of one Layer B op, from the mutations compiled from it."""
+    mine = [m for m in mutations if m.from_op == index]
+    if not mine:
+        return "compiled to nothing"
+    applied = sum(1 for m in mine if (m.result or "").startswith("applied"))
+    return f"{applied} of {len(mine)} mutations applied"
 
 
 def _message(tier: OutputTier, options: BuildOptions) -> str:

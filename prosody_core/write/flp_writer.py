@@ -20,9 +20,16 @@ import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from prosody_core.arrange import compile as compile_module
 from prosody_core.arrange.permissions import assert_plan_allowed
 from prosody_core.fs.source import assert_not_the_source
-from prosody_core.model.schemas import ArrangementPlan, BeatProject, PermissionLevel
+from prosody_core.model.schemas import (
+    ArrangementPlan,
+    BeatProject,
+    MutationKind,
+    MutationOp,
+    PermissionLevel,
+)
 from prosody_core.write.eventstream import Event, FLPFile, read_flp, write_flp
 
 # Event ids used here.
@@ -59,6 +66,8 @@ class WriteReport:
     item_size: int = ITEM_LEGACY
     operations: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    #: Layer C, with a result on each (ARCHITECTURE_NOTES item 3).
+    mutations: tuple[MutationOp, ...] = ()
 
     def log(self, message: str) -> None:
         self.operations.append(message)
@@ -111,62 +120,19 @@ def build_clip(
 
 
 def _pattern_lengths(project: BeatProject) -> dict[int, int]:
-    """Tiling length per pattern, rounded up to a whole number of bars.
-
-    A pattern's measured extent is where its last note *ends*, which is almost
-    never a bar line: a four-bar kick whose final hit is a 16th long measures
-    1464 ticks, not 1536. Tiling at the measured length would slide every
-    repetition earlier than the beat, and the drift compounds across an 80-bar
-    arrangement. FL snaps playlist clips to the grid, so we do too.
-    """
-    beats_per_bar = project.time_signature[0] or 4
-    ticks_per_bar = max(project.ppq * beats_per_bar, 1)
-
-    lengths: dict[int, int] = {}
-    for pattern in project.patterns:
-        measured = pattern.length_ticks or max(
-            (n.position + n.length for n in pattern.notes), default=0
-        )
-        if not measured:
-            continue
-        bars = max(1, -(-measured // ticks_per_bar))  # ceil division
-        lengths[pattern.index] = bars * ticks_per_bar
-    return lengths
+    """Kept for callers; the arithmetic lives in arrange.compile."""
+    return compile_module.pattern_lengths(project)
 
 
 def plan_to_clips(
     plan: ArrangementPlan, project: BeatProject
 ) -> list[tuple[int, int, int, int]]:
-    """Expand tile operations into (position, pattern, length, track) clips.
+    """(position, pattern, length, track) clips — Layer C, as the writer sees it.
 
-    A tile is emitted as one clip per pattern repetition rather than a single
-    stretched clip, so the result does not depend on FL's clip-looping
-    behaviour. Any remainder shorter than the pattern is dropped rather than
-    truncated, because trimming a clip is not a Level 0 operation.
+    Compiled by ``arrange.compile.compile_plan``; the writer no longer derives
+    anything from a Layer B op itself (ARCHITECTURE_NOTES item 3).
     """
-    beats_per_bar = project.time_signature[0] or 4
-    ticks_per_bar = max(project.ppq * beats_per_bar, 1)
-    lengths = _pattern_lengths(project)
-
-    clips: list[tuple[int, int, int, int]] = []
-    for op in plan.ops:
-        if op.op != "tile" or op.pattern is None:
-            continue
-        pattern_length = lengths.get(op.pattern)
-        if not pattern_length:
-            continue
-
-        start = (op.start_bar - 1) * ticks_per_bar
-        span = (op.bars or 0) * ticks_per_bar
-        track = op.track if op.track is not None else 0
-
-        position = start
-        while position + pattern_length <= start + span:
-            clips.append((position, op.pattern, pattern_length, track))
-            position += pattern_length
-
-    clips.sort()
-    return clips
+    return compile_module.clips_from(compile_module.compile_plan(plan, project))
 
 
 def _ensure_tracks(flp: FLPFile, needed: int, report: WriteReport) -> None:
@@ -196,12 +162,9 @@ def _ensure_tracks(flp: FLPFile, needed: int, report: WriteReport) -> None:
 
 
 def _write_markers(
-    flp: FLPFile, plan: ArrangementPlan, project: BeatProject, report: WriteReport
+    flp: FLPFile, mutations: tuple[MutationOp, ...], report: WriteReport
 ) -> None:
-    """One named time marker per section, inserted before the track list."""
-    beats_per_bar = project.time_signature[0] or 4
-    ticks_per_bar = max(project.ppq * beats_per_bar, 1)
-
+    """One named time marker per WRITE_MARKER mutation, before the track list."""
     # Drop markers the source already had, so rebuilding is idempotent.
     flp.events = [
         e for e in flp.events
@@ -214,14 +177,16 @@ def _write_markers(
     insert_at = anchor + 1
 
     events: list[Event] = []
-    for section in plan.sections:
-        position = (section.start_bar - 1) * ticks_per_bar
-        events.append(
-            Event(ID_TIMEMARKER_POSITION, struct.pack("<I", position))
-        )
-        events.append(Event(ID_TIMEMARKER_NAME, _text(section.name.value.upper())))
+    written = 0
+    for m in mutations:
+        if m.kind is not MutationKind.WRITE_MARKER:
+            continue
+        events.append(Event(ID_TIMEMARKER_POSITION, struct.pack("<I", m.start_tick)))
+        events.append(Event(ID_TIMEMARKER_NAME, _text(m.label or "SECTION")))
+        m.result = "applied"
+        written += 1
     flp.events[insert_at:insert_at] = events
-    report.markers_written = len(plan.sections)
+    report.markers_written = written
     report.log(f"WRITE_MARKERS count={report.markers_written}")
 
 
@@ -268,7 +233,9 @@ def write_arrangement(
             "new clips use zeroed trailing fields"
         )
 
-    clips = plan_to_clips(plan, project)
+    mutations = compile_module.compile_plan(plan, project)
+    clips = compile_module.clips_from(mutations)
+    report.mutations = mutations
     if not clips:
         raise WriteUnsupported(
             "the plan produced no playlist clips for this project's patterns"
@@ -295,6 +262,11 @@ def write_arrangement(
         report.log("REPLACE_PLAYLIST")
 
     report.clips_written = len(clips)
+    for m in mutations:
+        if m.kind is MutationKind.PLACE_PLAYLIST_INSTANCE:
+            m.result = "applied"
+        elif m.kind is MutationKind.OMIT_PLAYLIST_INSTANCE:
+            m.result = "applied: placements within the span were omitted"
     for op in plan.ops:
         if op.op == "tile":
             report.log(
@@ -305,9 +277,16 @@ def write_arrangement(
 
     if markers:
         try:
-            _write_markers(flp, plan, project, report)
+            _write_markers(flp, mutations, report)
         except Exception as exc:  # noqa: BLE001 - markers are optional
             report.warnings.append(f"section markers not written: {exc}")
+            for m in mutations:
+                if m.kind is MutationKind.WRITE_MARKER and m.result is None:
+                    m.result = f"skipped: {exc}"
+    else:
+        for m in mutations:
+            if m.kind is MutationKind.WRITE_MARKER:
+                m.result = "skipped: markers disabled"
 
     # Final gate inside the writer itself, so no caller can bypass it.
     write_flp(flp, Path(destination), source=Path(protect or source))

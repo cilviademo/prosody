@@ -48,6 +48,9 @@ class PatternRole:
     roles: tuple[Role, ...]
     length_ticks: int
     note_count: int
+    #: The strongest channel evidence behind the primary role — the
+    #: classifier's own number, carried through so a Layer B op can cite it.
+    confidence: float = 0.0
 
     @property
     def is_drums(self) -> bool:
@@ -74,10 +77,15 @@ def pattern_roles(project: BeatProject, analysis: Analysis) -> tuple[PatternRole
             weight[assignment.role] += max(assignment.confidence, 0.05)
 
         if not weight:
-            primary, roles = Role.UNKNOWN, ()
+            primary, roles, confidence = Role.UNKNOWN, (), 0.0
         else:
             primary = max(weight.items(), key=lambda kv: kv[1])[0]
             roles = tuple(sorted(weight, key=lambda r: -weight[r]))
+            confidence = max(
+                (a.confidence for a in by_channel.values()
+                 if a.role is primary and any(n.channel == a.channel for n in pattern.notes)),
+                default=0.0,
+            )
 
         length = pattern.length_ticks or max(
             (n.position + n.length for n in pattern.notes), default=0
@@ -90,6 +98,7 @@ def pattern_roles(project: BeatProject, analysis: Analysis) -> tuple[PatternRole
                 roles=roles,
                 length_ticks=length,
                 note_count=len(pattern.notes),
+                confidence=round(confidence, 3),
             )
         )
     return tuple(out)
@@ -179,16 +188,36 @@ def build_plan(
                 PlaylistOp(
                     op="tile", role=pattern.role, pattern=pattern.pattern,
                     track=track_of[pattern.pattern], start_bar=bar, bars=span,
+                    reason=(
+                        f"{section_type.value} wants {pattern.role.value} at energy "
+                        f"{energy:.1f}"
+                        + (f"; drums stop {drop} bars early for the transition" if span != bars else "")
+                    ),
+                    evidence=(
+                        f"role:{pattern.role.value}@{pattern.confidence:.2f}",
+                        f"profile:{profile.genre}/{section_type.value}",
+                    ),
+                    confidence=pattern.confidence,
+                    permission_level=level,
                 )
             )
 
         ops.append(
-            PlaylistOp(op="marker", start_bar=bar, bars=bars, role=None)
+            PlaylistOp(
+                op="marker", start_bar=bar, bars=bars, role=None,
+                reason=f"mark the start of {section_type.value}",
+                evidence=(f"profile:{profile.genre}/grammar",),
+                permission_level=level,
+            )
         )
         sections.append(
             Section(
                 name=section_type, start_bar=bar, bars=bars, energy=round(energy, 3),
                 active_roles=roles, dropout_bars=drop,
+                goal=(
+                    f"{section_type.value}: {', '.join(r.value for r in roles) or 'nothing'} "
+                    f"at energy {energy:.1f}" + (f", {drop}-bar dropout at the end" if drop else "")
+                ),
             )
         )
         bar += bars
