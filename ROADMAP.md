@@ -49,3 +49,24 @@ Steps 1 and 2 are the highest-value work available and neither needs FL Studio.
 Do not jump to AI arrangement. The order exists because each phase's output is
 the next phase's input, and because a classifier tuned against an unreliable
 parser is tuned against noise.
+
+## Deferred until after v0.2
+
+Recorded here from ARCHITECTURE_NOTES.md so they are not forgotten and not
+built early. One line each; none is in scope for the FIRST-RUN gate.
+
+- Evidence-graph tables: every analyzed value linked to the events that produced it.
+- Content-addressed analysis cache keyed by source hash + analysis version.
+- Motif fingerprinting across patterns and projects.
+- Multi-evidence section inference (energy, density, repetition, markers together).
+- Composition-retention metrics on every derivative.
+- User-decision persistence: remembered edits feed the next plan.
+- Local producer priors learned from the user's own library.
+- Musical reference library for structure comparison.
+- 15-category regression corpus of real projects.
+- Additional worker isolation beyond the single sidecar.
+- JUCE/VST shell for in-DAW use.
+- Graph databases.
+- Cloud anything.
+- Model training.
+- Extracting the Tauri + Python sidecar shell into a template repo for Artifact Bench — only once Prosody is FIRST-RUN READY.
