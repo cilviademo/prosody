@@ -163,7 +163,7 @@ def _ensure_tracks(flp: FLPFile, needed: int, report: WriteReport) -> None:
 
 def _write_markers(
     flp: FLPFile, mutations: tuple[MutationOp, ...], report: WriteReport
-) -> None:
+) -> list[int]:
     """One named time marker per WRITE_MARKER mutation, before the track list."""
     # Drop markers the source already had, so rebuilding is idempotent.
     flp.events = [
@@ -173,21 +173,21 @@ def _write_markers(
 
     anchor = flp.index_of(ID_PLAYLIST)
     if anchor is None:
-        return
+        return []
     insert_at = anchor + 1
 
     events: list[Event] = []
-    written = 0
-    for m in mutations:
+    applied: list[int] = []
+    for index, m in enumerate(mutations):
         if m.kind is not MutationKind.WRITE_MARKER:
             continue
         events.append(Event(ID_TIMEMARKER_POSITION, struct.pack("<I", m.start_tick)))
         events.append(Event(ID_TIMEMARKER_NAME, _text(m.label or "SECTION")))
-        m.result = "applied"
-        written += 1
+        applied.append(index)
     flp.events[insert_at:insert_at] = events
-    report.markers_written = written
+    report.markers_written = len(applied)
     report.log(f"WRITE_MARKERS count={report.markers_written}")
+    return applied
 
 
 def write_arrangement(
@@ -262,11 +262,13 @@ def write_arrangement(
         report.log("REPLACE_PLAYLIST")
 
     report.clips_written = len(clips)
-    for m in mutations:
+    # Models are immutable; results are assembled and the tuple rebuilt.
+    results: dict[int, str] = {}
+    for index, m in enumerate(mutations):
         if m.kind is MutationKind.PLACE_PLAYLIST_INSTANCE:
-            m.result = "applied"
+            results[index] = "applied"
         elif m.kind is MutationKind.OMIT_PLAYLIST_INSTANCE:
-            m.result = "applied: placements within the span were omitted"
+            results[index] = "applied: placements within the span were omitted"
     for op in plan.ops:
         if op.op == "tile":
             report.log(
@@ -275,18 +277,23 @@ def write_arrangement(
                 f"bars={op.bars} track={op.track}"
             )
 
+    marker_indices = [i for i, m in enumerate(mutations) if m.kind is MutationKind.WRITE_MARKER]
     if markers:
         try:
-            _write_markers(flp, mutations, report)
+            for i in _write_markers(flp, mutations, report):
+                results[i] = "applied"
+            for i in marker_indices:
+                results.setdefault(i, "skipped: no playlist to anchor markers to")
         except Exception as exc:  # noqa: BLE001 - markers are optional
             report.warnings.append(f"section markers not written: {exc}")
-            for m in mutations:
-                if m.kind is MutationKind.WRITE_MARKER and m.result is None:
-                    m.result = f"skipped: {exc}"
+            for i in marker_indices:
+                results.setdefault(i, f"skipped: {exc}")
     else:
-        for m in mutations:
-            if m.kind is MutationKind.WRITE_MARKER:
-                m.result = "skipped: markers disabled"
+        for i in marker_indices:
+            results[i] = "skipped: markers disabled"
+    report.mutations = tuple(
+        m.model_copy(update={"result": results.get(i)}) for i, m in enumerate(mutations)
+    )
 
     # Final gate inside the writer itself, so no caller can bypass it.
     write_flp(flp, Path(destination), source=Path(protect or source))
